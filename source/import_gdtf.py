@@ -12,14 +12,14 @@ import os
 import bpy
 import copy
 import math
+import pygdtf
 import hashlib
 import pathlib
 import tempfile
 import mathutils
 import traceback
-from . import pygdtf
 from types import SimpleNamespace
-from .io_scene_3ds.import_3ds import load_3ds
+from io_scene_3ds.import_3ds import load_3ds
 
 
 class ProfileGDTF:
