@@ -1,0 +1,31 @@
+schema_version = "1.0.0"
+id = "io_scene_mvr"
+name = "Import MVR Format (.mvr)"
+version = "1.1.0"
+tagline = "Import My Virtual Rig Files"
+maintainer = "NRG Sille <nrgsille@gmx.de>"
+type = "add-on"
+tags = ["Import-Export", "Scene", "Lighting"]
+blender_version_min = "4.2.0"
+license = ["SPDX:GPL-2.0-or-later"]
+website = "https://github.com/nrgsille76/io_scene_mvr"
+copyright = ["2024 Sebastian Schrand"]
+wheels = [
+  "./wheels/pygdtf-1.0.4-py3-none-any.whl",
+  "./wheels/pymvr-0.3.0.dev0-py3-none-any.whl",
+  "./wheels/io_scene_3ds-2.7.2-py3-none-any.whl",
+]
+
+[permissions]
+files = "Import My Virtual Rig files"
+
+[build]
+paths_exclude_pattern = [
+  "/.git/",
+  "__pycache__/",
+  ".*",
+  "*.pyc",
+  "__pycache__",
+  "*.zip",
+  "data.json",
+]
