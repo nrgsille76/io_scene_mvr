@@ -277,7 +277,7 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_index,
             symbol_object = object_data.new(name, None)
             group_collect.objects.link(symbol_object)
             symbol_object.matrix_world = symbol_mtx
-            symbol_object.empty_display_size = 0.01
+            symbol_object.empty_display_size = 0.001
             symbol_object.empty_display_type = 'ARROWS'
             symbol_object.instance_type = 'COLLECTION'
             symbol_object.instance_collection = symbol_collect
