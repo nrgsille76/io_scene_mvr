@@ -270,8 +270,10 @@ def load_model(profile, model):
         file_name = os.path.join(folder_path, inside_zip_path)
         try:
             load_3ds(file_name, bpy.context, FILTER={'MESH'}, KEYFRAME=False, APPLY_MATRIX=False)
+            obj_dimension = mathutils.Vector((model.length, model.width, model.height))
             for ob in bpy.context.selected_objects:
-                ob.data.transform(mathutils.Matrix.Scale(0.001, 4))
+                if obj_dimension.to_tuple(3) != ob.dimensions.to_tuple(3):
+                    ob.data.transform(mathutils.Matrix.Scale(0.001, 4))
         except Exception as e:
             bpy.ops.mesh.primitive_cube_add(size=0.1)
     else:
