@@ -12,14 +12,14 @@ import bpy
 import time
 import json
 import uuid
-import pymvr
 import random
 import zipfile
 import mathutils
+from . import pymvr
 from pathlib import Path
 from xml.etree import ElementTree
 from xml.etree.ElementTree import Element
-from io_scene_3ds.import_3ds import load_3ds
+from .io_scene_3ds.import_3ds import load_3ds
 from .import_gdtf import fixture_build, load_gdtf
 
 auxData = {}
@@ -108,6 +108,7 @@ def add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path, fixture_id
                     layer_idx, focus_point, extracted, group_collect, fixture_group=None):
 
     """Add fixture to the scene"""
+    fixture_id = fixture.fixture_id
     fixture_file = os.path.join(folder_path, fixture.gdtf_spec)
     existing_fixture = os.path.isfile(fixture_file)
 
@@ -120,10 +121,12 @@ def add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path, fixture_id
 
     unique_name = f"{fixture.name} {layer_idx}-{fixture_idx}"
     if existing_fixture is not None:
-        fixture_build(context, fixture_file, mscale, unique_name, focus_point, group_collect, fixture)
+        fixture_build(context, fixture_file, mscale, unique_name,
+                      focus_point, fixture_id, group_collect, fixture)
     else:
         unique_name = create_unique_fixture_name(unique_name, folder_path)
-        load_gdtf(context, fixture_file, mscale, unique_name, focus_point, group_collect, fixture)
+        load_gdtf(context, fixture_file, mscale, unique_name,
+                  focus_point, fixture_id, group_collect, fixture)
 
 
 def get_child_list(context, mscale, mvr_scene, child_list, layer_index,
