@@ -23,12 +23,12 @@ from bpy.props import (
 )
 
 bl_info = {
-    "name": "Import My Virtual Rig (.mvr)",
+    "name": "Import MVR & GDTF",
     "author": "Sebastian Sille",
     "version": (1, 1, 1),
     "blender": (4, 0, 0),
     "location": "File > Import",
-    "description": "Import My Virtual Rig files",
+    "description": "Import My Virtual Rig and General Device Type Format",
     "warning": "",
     "filepath_url": "",
     "category": "Import-Export",
