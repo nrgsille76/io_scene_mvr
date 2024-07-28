@@ -2,6 +2,10 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+__author__ = "Sebastian Sille <nrgsille@gmail.com>"
+__version__ = "1.1.0"
+__date__ = "2 Aug 2024"
+
 
 import bpy
 from bpy_extras.io_utils import (
