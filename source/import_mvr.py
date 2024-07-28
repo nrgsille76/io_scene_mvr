@@ -19,7 +19,7 @@ import mathutils
 from pathlib import Path
 from xml.etree import ElementTree
 from xml.etree.ElementTree import Element
-from .io_scene_3ds.import_3ds import load_3ds
+from io_scene_3ds.import_3ds import load_3ds
 from .import_gdtf import fixture_build, load_gdtf
 
 auxData = {}
