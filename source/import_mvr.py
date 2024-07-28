@@ -12,10 +12,10 @@ import bpy
 import time
 import json
 import uuid
+import pymvr
 import random
 import zipfile
 import mathutils
-from . import pymvr
 from pathlib import Path
 from xml.etree import ElementTree
 from xml.etree.ElementTree import Element
