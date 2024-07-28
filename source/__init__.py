@@ -2,10 +2,6 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-__author__ = "Sebastian Sille <nrgsille@gmail.com>"
-__version__ = "1.1.0"
-__date__ = "2 Aug 2024"
-
 
 import bpy
 from bpy_extras.io_utils import (
@@ -14,6 +10,7 @@ from bpy_extras.io_utils import (
     axis_conversion,
 )
 from bpy.props import (
+    IntProperty,
     BoolProperty,
     EnumProperty,
     FloatProperty,
@@ -22,12 +19,12 @@ from bpy.props import (
 )
 
 bl_info = {
-    "name": "Import MVR and GDTF",
+    "name": "Import My Virtual Rig (.mvr)",
     "author": "Sebastian Sille",
-    "version": (1, 1, 0),
+    "version": (1, 1, 1),
     "blender": (4, 0, 0),
     "location": "File > Import",
-    "description": "Import My Virtual Rig and General Device Type Format",
+    "description": "Import My Virtual Rig files",
     "warning": "",
     "filepath_url": "",
     "category": "Import-Export",
@@ -152,6 +149,13 @@ class ImportGDTF(bpy.types.Operator, ImportHelper):
     files: CollectionProperty(type=bpy.types.OperatorFileListElement, options={'HIDDEN', 'SKIP_SAVE'})
     directory: StringProperty(subtype='DIR_PATH')
 
+    fixture_index: IntProperty(
+        name="Index",
+        description="Fixture index for fixture count",
+        min=0, max=10000,
+        soft_min=0, soft_max=10000,
+        default=0,
+    )
     scale_objects: FloatProperty(
         name="Scale",
         description="Scale factor for all objects",
@@ -207,6 +211,7 @@ def import_gdtf_include(layout, operator):
     header, body = layout.panel("GDTF_import_include", default_closed=False)
     header.label(text="Include")
     if body:
+        layout.prop(operator, "fixture_index")
         layrow = layout.row(align=True)
         layrow.prop(operator, "use_gobo_search")
         layrow.label(text="", icon='OUTLINER_OB_IMAGE' if operator.use_gobo_search else 'IMAGE_DATA')
