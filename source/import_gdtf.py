@@ -18,7 +18,6 @@ import mathutils
 import uuid as pyuid
 from types import SimpleNamespace
 from io_scene_3ds.import_3ds import load_3ds
-from bpy_extras.image_utils import load_image
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
 from pathlib import Path
 
