@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 __author__ = "Sebastian Sille <nrgsille@gmail.com>"
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 __date__ = "2 Aug 2024"
 
 
@@ -155,10 +155,26 @@ class ImportGDTF(bpy.types.Operator, ImportHelper):
 
     fixture_index: IntProperty(
         name="Index",
-        description="Fixture index for fixture count",
+        description="Fixture start index",
         min=0, max=10000,
         soft_min=0, soft_max=10000,
         default=0,
+    )
+    fixture_count: IntProperty(
+        name="Quantity",
+        description="Fixture count",
+        min=0, max=1000,
+        soft_min=0, soft_max=1000,
+        default=1,
+    )
+    align_objects: FloatProperty(
+        name="Align",
+        description="Align distance between objects",
+        min=0.0, max=1000.0,
+        soft_min=0.0, soft_max=1000.0,
+        default=1.0,
+        subtype='DISTANCE',
+        unit='LENGTH'
     )
     scale_objects: FloatProperty(
         name="Scale",
@@ -166,12 +182,7 @@ class ImportGDTF(bpy.types.Operator, ImportHelper):
         min=0.0, max=10000.0,
         soft_min=0.0, soft_max=10000.0,
         default=1.0,
-    )
-    use_gobo_search: BoolProperty(
-        name="Gobo Search",
-        description="Search subdirectories for any associated gobos "
-        "(Warning, may be slow)",
-        default=True,
+        subtype='FACTOR'
     )
     use_collection: BoolProperty(
         name="Collection",
@@ -208,7 +219,7 @@ class ImportGDTF(bpy.types.Operator, ImportHelper):
         global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up,).to_4x4()
         keywords["global_matrix"] = global_matrix
 
-        return import_gdtf.load_file(self, context, **keywords)
+        return import_gdtf.load(self, context, **keywords)
 
 
 def import_gdtf_include(layout, operator):
@@ -216,9 +227,7 @@ def import_gdtf_include(layout, operator):
     header.label(text="Include")
     if body:
         layout.prop(operator, "fixture_index")
-        layrow = layout.row(align=True)
-        layrow.prop(operator, "use_gobo_search")
-        layrow.label(text="", icon='OUTLINER_OB_IMAGE' if operator.use_gobo_search else 'IMAGE_DATA')
+        layout.prop(operator, "fixture_count")
         layrow = layout.row(align=True)
         layrow.prop(operator, "use_collection")
         layrow.label(text="", icon='OUTLINER_COLLECTION' if operator.use_collection else 'GROUP')
@@ -234,6 +243,7 @@ def import_gdtf_transform(layout, operator):
     header, body = layout.panel("GDTF_import_transform", default_closed=False)
     header.label(text="Transform")
     if body:
+        layout.prop(operator, "align_objects")
         layout.prop(operator, "scale_objects")
         layrow = layout.row(align=True)
         layrow.prop(operator, "use_target")
