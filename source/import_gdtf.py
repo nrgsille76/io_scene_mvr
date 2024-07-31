@@ -765,7 +765,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                         constraint.target = obj_target
             if not yokes and not heads:
                 constraint = base.constraints.new('TRACK_TO')
-                constraint.target = target
+                constraint.target = main_target
     
     # 2D thumbnail planning symbol
     obj = load_2d(profile, name)
@@ -965,7 +965,13 @@ def fixture_build(context, filename, mscale, name, position, focus_point,
                 child.name = index_name(child.name)
             if obj.type == 'MESH' and len(obj.data.materials):
                 for mtl in obj.data.materials:
-                    obj_name = obj.name.split()[-1] if fixture is None else obj.name.split()[-2]
+                    ob_name = obj.name.split()
+                    if fixture is None:
+                        obj_name = ob_name[-1]
+                    elif len(ob_name) > 1:
+                        obj_name = ob_name[-2]
+                    else:
+                        obj_name = ob_name[0]
                     split_name = mtl.name.split('.')[0]
                     obj_material = '%s_%s' % (obj_name, split_name)
                     mtl.name = index_name(obj_material)
