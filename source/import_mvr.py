@@ -86,8 +86,8 @@ def get_matrix(obj, mtx):
 
 
 def trans_matrix(trans_mtx):
-    trans = list(trans_mtx)
-    matrix = mathutils.Matrix((trans[:3]+[0], trans[3:6]+[0], trans[6:9]+[0], trans[9:]+[1])).transposed()
+    mtx = list(trans_mtx)
+    matrix = mathutils.Matrix((mtx[:3]+[0], mtx[3:6]+[0], mtx[6:9]+[0], mtx[9:]+[1])).transposed()
     return matrix
 
 
@@ -109,6 +109,7 @@ def add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path, fixture_id
 
     """Add fixture to the scene"""
     fixture_id = fixture.fixture_id
+    fixture_pos = get_matrix(fixture, mscale)
     fixture_file = os.path.join(folder_path, fixture.gdtf_spec)
     existing_fixture = os.path.isfile(fixture_file)
 
@@ -121,11 +122,11 @@ def add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path, fixture_id
 
     unique_name = f"{fixture.name} {layer_idx}-{fixture_idx}"
     if existing_fixture is not None:
-        fixture_build(context, fixture_file, mscale, unique_name,
+        fixture_build(context, fixture_file, mscale, unique_name, fixture_pos,
                       focus_point, fixture_id, group_collect, fixture)
     else:
         unique_name = create_unique_fixture_name(unique_name, folder_path)
-        load_gdtf(context, fixture_file, mscale, unique_name,
+        load_gdtf(context, fixture_file, mscale, unique_name, fixture_pos,
                   focus_point, fixture_id, group_collect, fixture)
 
 
@@ -495,6 +496,11 @@ def load(operator, context, files=None, directory="", filepath="", scale_objects
     active = context.view_layer.layer_collection.children.get(default_layer.name)
     if active is not None:
         context.view_layer.active_layer_collection = active
+
+    context.window.cursor_set('DEFAULT')
+
+    return {'FINISHED'}
+
 
     context.window.cursor_set('DEFAULT')
 
