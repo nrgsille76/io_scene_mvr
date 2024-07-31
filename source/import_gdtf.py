@@ -14,10 +14,7 @@ import copy
 import math
 import pygdtf
 import random
-import hashlib
-import pathlib
 import mathutils
-import traceback
 import uuid as pyuid
 from types import SimpleNamespace
 from io_scene_3ds.import_3ds import load_3ds
@@ -272,8 +269,8 @@ def extract_gobos_as_sequence(profile, name):
         os.makedirs(sequence_path)
     first = ""
     count = 0
-    for idx, image in enumerate(pathlib.Path(images_path).rglob("*"), start=1):
-        destination = pathlib.Path(sequence_path, f"image_{idx:04}{image.suffix}")
+    for idx, image in enumerate(Path(images_path).rglob("*"), start=1):
+        destination = Path(sequence_path, f"image_{idx:04}{image.suffix}")
         if idx == 1:
             first = str(destination.resolve())
         if idx == 256:
