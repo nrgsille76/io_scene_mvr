@@ -1,6 +1,6 @@
 schema_version = "1.0.0"
 id = "io_scene_mvr"
-name = "MVR Scene & GDTF (.mvr, .gdtf)"
+name = "MVR Scene and GDTF (.mvr, .gdtf)"
 version = "1.1.1"
 tagline = "My Virtual Rig and General Device Type Format"
 maintainer = "NRG Sille <nrgsille@gmx.de>"
@@ -17,7 +17,7 @@ wheels = [
 ]
 
 [permissions]
-files = "Import My Virtual Rig files"
+files = "General Device Type Format and My Virtual Rig files"
 
 [build]
 paths_exclude_pattern = [
