@@ -1095,8 +1095,3 @@ def load(operator, context, files=None, directory="", filepath="", fixture_index
     context.window.cursor_set('DEFAULT')
 
     return {'FINISHED'}
-
-
-    context.window.cursor_set('DEFAULT')
-
-    return {'FINISHED'}
