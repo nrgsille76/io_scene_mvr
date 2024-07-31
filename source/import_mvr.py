@@ -500,8 +500,3 @@ def load(operator, context, files=None, directory="", filepath="", scale_objects
     context.window.cursor_set('DEFAULT')
 
     return {'FINISHED'}
-
-
-    context.window.cursor_set('DEFAULT')
-
-    return {'FINISHED'}
