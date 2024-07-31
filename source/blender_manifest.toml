@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 id = "io_scene_mvr"
 name = "Import GDTF and MVR Format"
-version = "1.1.0"
+version = "1.1.1"
 tagline = "Import My Virtual Rig and General Device Type Format"
 maintainer = "NRG Sille <nrgsille@gmx.de>"
 type = "add-on"
@@ -13,7 +13,7 @@ copyright = ["2024 Sebastian Schrand"]
 wheels = [
   "wheels/pygdtf-1.0.4-py3-none-any.whl",
   "wheels/pymvr-0.3.0.dev0-py3-none-any.whl",
-  "wheels/io_scene_3ds-2.7.3-py3-none-any.whl",
+  "wheels/io_scene_3ds-2.7.4-py3-none-any.whl",
 ]
 
 [permissions]
