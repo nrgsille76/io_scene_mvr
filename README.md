@@ -11,7 +11,7 @@
 &nbsp;&nbsp; `File --> Import/Export --> My Virtual Rig (.mvr)`  
 
 **Version**  
-&nbsp;&nbsp; 1.0.0  
+&nbsp;&nbsp; 1.1.1  
 
 **Authors**  
 &nbsp;&nbsp; Sebastian Schrand, Hugo Aboud, Vanous,  
