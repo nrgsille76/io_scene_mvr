@@ -1,11 +1,11 @@
 schema_version = "1.0.0"
 id = "io_scene_mvr"
-name = "Import GDTF and MVR Format"
+name = "MVR Scene & GDTF (.mvr, .gdtf)"
 version = "1.1.1"
-tagline = "Import My Virtual Rig and General Device Type Format"
+tagline = "My Virtual Rig and General Device Type Format"
 maintainer = "NRG Sille <nrgsille@gmx.de>"
 type = "add-on"
-tags = ["Import-Export", "Scene", "Lighting"]
+tags = ["Import-Export", "Scene", "Lighting", "Tracking", "Rigging"]
 blender_version_min = "4.2.0"
 license = ["SPDX:GPL-2.0-or-later"]
 website = "https://github.com/nrgsille76/io_scene_mvr"
@@ -17,7 +17,7 @@ wheels = [
 ]
 
 [permissions]
-files = "Import MVR and GDTF files"
+files = "Import My Virtual Rig files"
 
 [build]
 paths_exclude_pattern = [
