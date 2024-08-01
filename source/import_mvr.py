@@ -377,6 +377,9 @@ def load_mvr(context, filename, mscale=mathutils.Matrix(), FIXTURES=True, TARGET
     classes = auxdata.classes
     symdefs = auxdata.symdefs
 
+    for ob in viewlayer.objects.selected:
+        ob.select_set(False)
+
     for aux_idx, symdef in enumerate(symdefs):
         if aux_dir and symdef.name in aux_dir.children:
             aux_collection = aux_dir.children.get(symdef.name)
