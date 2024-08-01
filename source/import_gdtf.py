@@ -448,7 +448,6 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
 
         # Prefer File first, as some GDTFs have both File and PrimitiveType
         if primitive == 'Undefined' or (model.file and model.file.name != "" and primitive != 'Pigtail'):
-            print('primitive', primitive, model.file.name)
             obj = data_objects.get(geometry_name)
             if obj is None or obj.get('Model Name') != mesh_name or obj.get('Fixture ID') != fixture_id:
                 geo = data_meshes.get(mesh_name)
