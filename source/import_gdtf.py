@@ -336,17 +336,14 @@ def load_model(profile, name, model):
     folder_path = os.path.join(get_folder_path(), name)
     obj_dimension = mathutils.Vector((model.length, model.width, model.height))
 
-    if model.file.extension.lower() == "3ds":
+    if model.file.extension.lower() == '3ds':
         inside_zip_path = f"models/3ds/{model.file.name}.{model.file.extension}"
         file_name = os.path.join(folder_path, inside_zip_path)
         try:
             profile._package.extract(inside_zip_path, folder_path)
             load_3ds(file_name, bpy.context, FILTER={'MESH'}, KEYFRAME=False, APPLY_MATRIX=False)
             for ob in bpy.context.selected_objects:
-                if ob.dimensions.to_tuple(3) > tuple(v*500 for v in obj_dimension.to_tuple(3)):
-                    ob.data.transform(mathutils.Matrix.Scale(0.001, 4))
-                elif ob.dimensions.to_tuple(3) > tuple(v*50 for v in obj_dimension.to_tuple(3)):
-                    ob.data.transform(mathutils.Matrix.Scale(0.01, 4))
+                ob.data['Model Type'] = model.file.extension.lower()
         except:
             alternative = load_blender_primitive(model)
             bpy.context.view_layer.active_layer_collection.collection.objects.link(alternative)
@@ -357,15 +354,18 @@ def load_model(profile, name, model):
         file_name = os.path.join(folder_path, inside_zip_path)
         bpy.ops.import_scene.gltf(filepath=file_name)
         for ob in bpy.context.selected_objects:
-            ob.data['Transform'] = True
+            ob.data['Model Type'] = model.file.extension.lower()
     objects = list(bpy.context.selected_objects)
 
     # if the model is made up of multiple parts we must join them
     obj = join_parts_apply_transforms(objects)
     obj.rotation_mode = 'XYZ'
     scale_vector = obj.scale * obj_dimension
-    dimensions = obj.dimensions or mathutils.Vector((1, 1, 1))
-    obj.scale = mathutils.Vector([scale_vector[val] / dimensions[val] for val in range(3)])
+    factor = mathutils.Vector([scale_vector[val] / max(obj.dimensions[val], 1e-09) for val in range(3)])
+    if obj.data.get('Model Type') == '3ds':
+        obj.data.transform(mathutils.Matrix.Diagonal(factor).to_4x4())
+    else:
+        obj.scale = factor
     if obj.data:
         obj.data.name = model.file.name
     return obj
