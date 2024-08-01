@@ -314,7 +314,7 @@ def join_parts_apply_transforms(objects):
             join += 1
             bpy.context.view_layer.objects.active = ob
             single = ob
-            if hasattr(ob.data, 'Transform'):  # glb files
+            if ob.data.get('Transform'):  # glb files
                 ob.data.transform(mb)
         ob.matrix_basis.identity()
     if join > 0:
@@ -338,17 +338,26 @@ def load_model(profile, name, model):
 
     if model.file.extension.lower() == "3ds":
         inside_zip_path = f"models/3ds/{model.file.name}.{model.file.extension}"
-        profile._package.extract(inside_zip_path, folder_path)
         file_name = os.path.join(folder_path, inside_zip_path)
-        load_3ds(file_name, bpy.context, FILTER={'MESH'}, KEYFRAME=False, APPLY_MATRIX=False)
-        for ob in bpy.context.selected_objects:
-            if ob.dimensions.to_tuple(3) > tuple(v*10 for v in obj_dimension.to_tuple(3)):
-                ob.data.transform(mathutils.Matrix.Scale(0.001, 4))
+        try:
+            profile._package.extract(inside_zip_path, folder_path)
+            load_3ds(file_name, bpy.context, FILTER={'MESH'}, KEYFRAME=False, APPLY_MATRIX=False)
+            for ob in bpy.context.selected_objects:
+                if ob.dimensions.to_tuple(3) > tuple(v*500 for v in obj_dimension.to_tuple(3)):
+                    ob.data.transform(mathutils.Matrix.Scale(0.001, 4))
+                elif ob.dimensions.to_tuple(3) > tuple(v*50 for v in obj_dimension.to_tuple(3)):
+                    ob.data.transform(mathutils.Matrix.Scale(0.01, 4))
+        except:
+            alternative = load_blender_primitive(model)
+            bpy.context.view_layer.active_layer_collection.collection.objects.link(alternative)
+            alternative.select_set(True)
     else:
         inside_zip_path = f"models/gltf/{model.file.name}.{model.file.extension}"
         profile._package.extract(inside_zip_path, folder_path)
         file_name = os.path.join(folder_path, inside_zip_path)
         bpy.ops.import_scene.gltf(filepath=file_name)
+        for ob in bpy.context.selected_objects:
+            ob.data['Transform'] = True
     objects = list(bpy.context.selected_objects)
 
     # if the model is made up of multiple parts we must join them
@@ -398,7 +407,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
 
     def load_geometries(geometry):
         """Load 3d models, primitives and shapes"""
-        print(f"loading geometry {geometry.name}")
+        #print(f"loading geometry {geometry.name}")
 
         data_meshes = bpy.data.meshes
         data_objects = bpy.data.objects
@@ -408,7 +417,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         if geometry_class == 'GeometryBeam':
             if str(geometry.beam_type.value) in ['None' 'Glow']:
                 geometry_name = 'Glow'
-        for ob in bpy.context.selected_objects:
+        for ob in data_objects:
             ob.select_set(False)
         if isinstance(geometry, pygdtf.GeometryReference):
             reference = pygdtf.utils.get_geometry_by_name(profile, geometry.geometry)
@@ -438,7 +447,8 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
             model.primitive_type = pygdtf.PrimitiveType(primitive)
 
         # Prefer File first, as some GDTFs have both File and PrimitiveType
-        if primitive == 'Undefined' or model.file and mesh_name != "" and primitive != 'Pigtail':
+        if primitive == 'Undefined' or (model.file and model.file.name != "" and primitive != 'Pigtail'):
+            print('primitive', primitive, model.file.name)
             obj = data_objects.get(geometry_name)
             if obj is None or obj.get('Model Name') != mesh_name or obj.get('Fixture ID') != fixture_id:
                 geo = data_meshes.get(mesh_name)
@@ -501,7 +511,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                 obj['Geometry Type'] = 'Pigtail'
             objectDict[cleanup_name(geometry)] = obj
             mb = obj.matrix_basis.copy()
-            if hasattr(obj.data, 'Transform'):
+            if obj.data.get('Transform'):
                 obj.data.transform(mb) 
             for cld in obj.children:
                 cld.matrix_local = mb @ cld.matrix_local
@@ -702,6 +712,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
             feature = channelData.get(obj.get('Original Name'))
             obj['Mobile Axis'] = feature
             if feature == attribute:
+                obj['Geometry Type'] = 'Axis'
                 axis_objects.append(obj)
         return axis_objects
 
@@ -709,10 +720,10 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         return (abs(round(obj.location.x, 1)) == 0.0 and abs(round(obj.location.y, 1)) == 0.0)
 
     # This could be moved to the processing up higher,but for now, it's easier here
-    moving_objects = [ob for ob in objectDict.values() if ob.get('Geometry Type') == 'Axis']
-    base = next(ob for ob in objectDict.values() if ob.get('Root Geometry'))
     yokes = get_axis_objects('Pan')
     heads = get_axis_objects('Tilt')
+    base = next(ob for ob in objectDict.values() if ob.get('Root Geometry'))
+    moving_objects = [ob for ob in objectDict.values() if ob.get('Geometry Type') == 'Axis']
 
     if TARGETS:
         target_uid = str(pyuid.uuid4())
@@ -729,14 +740,15 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         for idx, obj in enumerate(moving_objects):
             center_object = check_center_object(obj)
             center_parent = obj.parent and check_center_object(obj.parent)
-            check_pan = obj.parent and obj.parent.get('Mobile Axis') == 'Tilt'
+            check_parent = obj.parent and obj.parent.get('Mobile Axis') == 'Tilt'
+            check_pan = obj.get('Mobile Axis') == 'Pan'
             check_tilt = obj.get('Mobile Axis') == 'Tilt'
             constraint = obj.constraints.new('LOCKED_TRACK')
-            if check_tilt or check_pan and obj.parent.parent and obj.parent.parent.get('Mobile Axis') == 'Pan':
+            if check_tilt or check_parent and obj.parent.parent and obj.parent.parent.get('Mobile Axis') == 'Pan':
                 constraint.track_axis = 'TRACK_NEGATIVE_Z'
             else:
                 constraint.track_axis = 'TRACK_NEGATIVE_Y'
-            constraint.lock_axis = 'LOCK_X' if obj.get('Mobile Axis') == 'Tilt' else 'LOCK_Z'
+            constraint.lock_axis = 'LOCK_X' if check_tilt else 'LOCK_Z'
             if center_object and center_parent:
                 constraint.target = main_target
                 obj['Target'] = target_uid
@@ -759,9 +771,12 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                             obj_target.location = (obj.parent.location.x, obj.parent.location.y, 0)
                         create_transform_property(obj_target)
                         constraint.target = obj_target
-            if not yokes and not heads:
+            if check_pan and not len(obj.children):
                 constraint = base.constraints.new('TRACK_TO')
                 constraint.target = main_target
+        if not yokes and not heads:
+            constraint = base.constraints.new('TRACK_TO')
+            constraint.target = main_target
     
     # 2D thumbnail planning symbol
     obj = load_2d(profile, name)
@@ -822,8 +837,8 @@ def get_tilt(model_collection, channels):
                 return obj
 
 
-def fixture_build(context, filename, mscale, name, position, focus_point,
-                  fixture_idx, collect, fixture, TARGETS=True, BEAMS=True, CONES=False):
+def fixture_build(context, filename, mscale, name, position, focus_point, fixture_id,
+                  gelcolor, collect, fixture, TARGETS=True, BEAMS=True, CONES=False):
 
     viewlayer = context.view_layer
     object_data = bpy.data.objects
@@ -833,17 +848,14 @@ def fixture_build(context, filename, mscale, name, position, focus_point,
     fixture_name = create_fixture_name(name)
     uid = gdtf_profile.fixture_type_id
     mode = FixtureMode(gdtf_profile)
-    fixture_id = fixture_idx
-    color = (1.0, 1.0, 1.0)
     has_gobos = False
     channels = []
 
     if fixture:
         uid = fixture.uuid
         mode = fixture.gdtf_mode
-        fixture_id = int(fixture.fixture_id)
-        gel_color = convert_color(fixture.color)
-        color =  list(int((255/1)*i) for i in gel_color[:3])
+        color = convert_color(gelcolor)
+        gelcolor = list(int((255/1)*i) for i in color[:3])
 
     def index_name(device):
         device_name = device
@@ -855,6 +867,10 @@ def fixture_build(context, filename, mscale, name, position, focus_point,
     index_collection = next((col for col in data_collect if col.get('Fixture ID') == fixture_id), False)
     if index_collection:
         for obj in index_collection.objects:
+            if obj.get('Root Geometry'):
+                position = obj.matrix_world.copy()
+            if obj.get('Geometry Type') == 'Target':
+                focus_point = obj.matrix_world.copy()
             object_data.remove(obj)
         data_collect.remove(index_collection)
 
@@ -893,7 +909,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point,
     head = get_tilt(model_collection, channels)
 
     if model_collection:
-        print("creating model collection... %s" % model_collection.name)
+        print("creating fixture... %s" % model_collection.name)
         for obj in model_collection.objects:
             linkDict[obj.name] = obj
             if obj.type == 'MESH' and obj.get('Geometry Type') == 'Beam':
@@ -904,10 +920,11 @@ def fixture_build(context, filename, mscale, name, position, focus_point,
                 emitter.shadow_method = "NONE"
                 emit_shader = PrincipledBSDFWrapper(emitter, is_readonly=False, use_nodes=True)
                 emit_shader.emission_strength = 1.0
-                emit_shader.emission_color = color
+                emit_shader.emission_color = gelcolor[:]
             elif obj.parent and obj.type == 'LIGHT':
                 obj['UUID'] = uid
                 obj.matrix_world = obj.matrix_world @ obj.parent.matrix_local.inverted()
+                obj.data.color = gelcolor[:]
                 gobos = extract_gobos(gdtf_profile, name)
                 if len(gobos):
                     nodes = obj.data.node_tree.nodes
@@ -918,7 +935,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point,
                     mix.blend_type = 'DARKEN'
                     mix.location = (-140, 340)
                     rgb.location = (-380, 100)
-                    mix.inputs[2].default_value[:3] = rgb.outputs[0].default_value[:3] = obj.data.color
+                    mix.inputs[2].default_value[:3] = rgb.outputs[0].default_value[:3] = gelcolor[:]
                     gobo_node = nodes.new(type='ShaderNodeTexImage')
                     rota_node = nodes.new(type='ShaderNodeVectorRotate')
                     cord_node = nodes.new(type='ShaderNodeTexCoord')
@@ -983,18 +1000,18 @@ def fixture_build(context, filename, mscale, name, position, focus_point,
                                 for child in childs.children_recursive:
                                     child_name = child.name.split('.')[0]
                                     child.name = '%s %d' % (child_name, idx + 1)
-          
+                                    
         # Relink constraints
-        for obj in model_collection.objects:
-            target = obj.get('Target')
-            if len(obj.constraints):
-                for child in obj.children:
-                    if len(child.constraints) and child.constraints[0].target is None:
-                        if child.constraints[0].target is None:
+        if TARGETS:
+            for obj in model_collection.objects:
+                target = obj.get('Target')
+                if len(obj.constraints):
+                    for child in obj.children:
+                        if len(child.constraints) and child.constraints[0].target is None:
                             child.constraints[0].target = obj.constraints[0].target
-            if target is not None:
-                for constraint in obj.constraints:
-                    constraint.target = targetData.get(target)
+                if target is not None:
+                    for constraint in obj.constraints:
+                        constraint.target = targetData.get(target)
 
         # Set position
         for obj in model_collection.objects:
@@ -1002,7 +1019,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point,
                 obj.matrix_world = position @ obj.matrix_world.copy()
                 create_transform_property(obj)
 
-        # Set target's position from MVR
+        # Set target position
         if focus_point is not None:
             for obj in model_collection.objects:
                 if obj.get('Geometry Type') == 'Target':
@@ -1016,49 +1033,38 @@ def fixture_build(context, filename, mscale, name, position, focus_point,
                 obj.active_material = gobo_material
                 obj.active_material.shadow_method = 'CLIP'
                 obj.active_material.blend_method = 'BLEND'
-                obj.material_slots[0].link = 'OBJECT' # ensure that each fixture has it's own material
+                obj.material_slots[0].link = 'OBJECT'
                 obj.material_slots[0].material = gobo_material
 
-        # Link collection to DMX collection
+        # Link collection to layer collection
         if collect is None and model_collection.name not in layer_collect.collection.children:
             layer_collect.collection.children.link(model_collection)
 
         # Set Pigtail visibility and Beam selection
         for obj in model_collection.objects:
-            if 'Pigtail' in obj.get('Geometry Type', ""):
-                obj.hide_set(False)
-                obj.hide_viewport = False
-                obj.hide_render = False
-            if obj.get('Root Geometry', False):
-                continue
-            if 'Target' in obj.name:
-                continue
-            if obj.get('2D Symbol', None) == "all":
+            if obj.get('2D Symbol', None) == 'all':
                 obj.hide_set(True)
                 obj.hide_viewport = True
                 obj.hide_render = True
-                continue
-
             obj.hide_select = False
 
 
-def load_gdtf(context, filename, mscale, name, position, focus_point,
-              fixture_idx, collect, fixture, TARGETS=True, BEAMS=True, CONES=False):
+def load_gdtf(context, filename, mscale, name, position, focus_point, fixture_id,
+              gelcolor, collect, fixture, TARGETS=True, BEAMS=True, CONES=False):
 
     targetData.clear()
     channelData.clear()
 
     fixture_build(context, filename, mscale, name, position, focus_point,
-                  fixture_idx, collect, fixture, TARGETS, BEAMS, CONES)
+                  fixture_id, gelcolor, collect, fixture, TARGETS, BEAMS, CONES)
 
     targetData.clear()
     channelData.clear()
 
 
-def load_prepare(context, filename, global_matrix, collect, align_objects,
-                 scale_objects, fixture_index, fixture_count, TARGETS, BEAMS, CONES):
+def load_prepare(context, filename, global_matrix, collect, align_objects, align_axis, scale_objects,
+                 fixture_index, fixture_count, gel_color, device_position, TARGETS, BEAMS, CONES):
 
-    
     name = Path(filename).stem
     mscale = mathutils.Matrix.Scale(scale_objects, 4)
 
@@ -1069,17 +1075,25 @@ def load_prepare(context, filename, global_matrix, collect, align_objects,
         count = idx - fixture_index
         distribution = count * align_objects
         align = 0.5 * (fixture_count * align_objects) - (0.5 * align_objects)
-        position = mathutils.Matrix.Translation((distribution - align, 0, 1))
-        focus_point = mathutils.Matrix.Translation((position.to_translation().x, 0, 0))
-        load_gdtf(context, filename, mscale, name, position,
-                  focus_point, idx, collect, None, TARGETS, BEAMS, CONES)
+        spread = (device_position[0] + (distribution - align), device_position[1], device_position[2])
+        if align_axis == 'Y':
+            spread = (device_position[0], device_position[1] + (distribution - align), device_position[2])
+        elif align_axis == 'Z':
+            spread = (device_position[0], device_position[1], device_position[2] + (distribution - align))
+        position = mathutils.Matrix.Translation(spread)
+        focus_point = mathutils.Matrix.Translation((spread[0], spread[1], 0))
+        load_gdtf(context, filename, mscale, name, position, focus_point,
+                  idx, gel_color, collect, None, TARGETS, BEAMS, CONES)
 
 
-def load(operator, context, files=None, directory="", filepath="", fixture_index=0, fixture_count=1, align_objects=0.5,
-         scale_objects=1.0, use_collection=False, use_target=True, use_beams=True, use_show_cone=False, global_matrix=None):
+def load(operator, context, files=None, directory="", filepath="", fixture_index=0, fixture_count=1,
+         align_axis={'X'}, align_objects=1.0, scale_objects=1.0, gel_color=[1.0, 1.0, 1.0], device_position=None,
+         use_collection=False, use_targets=True, use_beams=True, use_show_cone=False, global_matrix=None):
 
     context.window.cursor_set('WAIT')
     default_layer = context.view_layer.active_layer_collection.collection
+    if device_position is None:
+        device_position = [0.0, 0.0, 1.0]
 
     for fl in files:
         collect = None
@@ -1087,8 +1101,9 @@ def load(operator, context, files=None, directory="", filepath="", fixture_index
             collect = bpy.data.collections.new(Path(fl.name).stem)
             context.scene.collection.children.link(collect)
             context.view_layer.active_layer_collection = context.view_layer.layer_collection.children[collect.name]
-        load_prepare(context, os.path.join(directory, fl.name), global_matrix, collect, align_objects, scale_objects,
-                     fixture_index, fixture_count, TARGETS=use_target, BEAMS=use_beams, CONES=use_show_cone)
+        load_prepare(context, os.path.join(directory, fl.name), global_matrix, collect, align_objects,
+                     align_axis, scale_objects, fixture_index, fixture_count, gel_color, device_position,
+                     TARGETS=use_targets, BEAMS=use_beams, CONES=use_show_cone)
 
     active = context.view_layer.layer_collection.children.get(default_layer.name)
     if active is not None:
