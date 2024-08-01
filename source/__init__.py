@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 __author__ = "Sebastian Sille <nrgsille@gmail.com>"
-__version__ = "1.1.1"
+__version__ = "1.1.2"
 __date__ = "2 Aug 2024"
 
 
@@ -20,12 +20,13 @@ from bpy.props import (
     FloatProperty,
     StringProperty,
     CollectionProperty,
+    FloatVectorProperty,
 )
 
 bl_info = {
     "name": "Import MVR & GDTF",
     "author": "Sebastian Sille",
-    "version": (1, 1, 1),
+    "version": (1, 1, 2),
     "blender": (4, 0, 0),
     "location": "File > Import",
     "description": "Import My Virtual Rig and General Device Type Format",
@@ -60,38 +61,28 @@ class ImportMVR(bpy.types.Operator, ImportHelper):
         min=0.0, max=10000.0,
         soft_min=0.0, soft_max=10000.0,
         default=1.0,
-    )
-    use_image_search: BoolProperty(
-        name="Image Search",
-        description="Search subdirectories for any associated images "
-        "(Warning, may be slow)",
-        default=True,
-    )
-    object_filter: EnumProperty(
-        name="Object Filter", options={'ENUM_FLAG'},
-        items=(('MATERIAL', "Material".rjust(12), "", 'MATERIAL_DATA', 0x1),
-               ('LIGHT', "Light".rjust(11), "", 'LIGHT_DATA', 0x2),
-               ('EMPTY', "Empty".rjust(11), "", 'EMPTY_AXIS', 0x4),
-               ),
-        description="Object types to import",
-        default={'MATERIAL', 'LIGHT', 'EMPTY'},
+        subtype='FACTOR',
     )
     use_collection: BoolProperty(
         name="Collection",
         description="Create a new collection",
         default=False,
     )
-    use_target: BoolProperty(
-        name="Target",
-        description="Use constraint for targets",
-        default=False,
+    use_fixtures: BoolProperty(
+        name="Fixtures",
+        description="Import fixtures of the scene",
+        default=True,
+    )
+    use_targets: BoolProperty(
+        name="Targets",
+        description="Use constraints for targets",
+        default=True,
     )
 
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-
         import_mvr_include(layout, self)
         import_mvr_transform(layout, self)
 
@@ -109,12 +100,11 @@ def import_mvr_include(layout, operator):
     header.label(text="Include")
     if body:
         layrow = layout.row(align=True)
-        layrow.prop(operator, "use_image_search")
-        layrow.label(text="", icon='OUTLINER_OB_IMAGE' if operator.use_image_search else 'IMAGE_DATA')
-        layout.column().prop(operator, "object_filter")
-        layrow = layout.row(align=True)
         layrow.prop(operator, "use_collection")
         layrow.label(text="", icon='OUTLINER_COLLECTION' if operator.use_collection else 'GROUP')
+        layrow = layout.row(align=True)
+        layrow.prop(operator, "use_fixtures")
+        layrow.label(text="", icon='OUTLINER_OB_LIGHT' if operator.use_fixtures else 'LIGHT')
 
 
 def import_mvr_transform(layout, operator):
@@ -123,8 +113,9 @@ def import_mvr_transform(layout, operator):
     if body:
         layout.prop(operator, "scale_objects")
         layrow = layout.row(align=True)
-        layrow.prop(operator, "use_target")
-        layrow.label(text="", icon='CON_STRETCHTO' if operator.use_target else 'CON_TRACKTO')
+        layrow.enabled = (operator.use_fixtures == True)
+        layrow.prop(operator, "use_targets")
+        layrow.label(text="", icon='CON_STRETCHTO' if operator.use_targets else 'CON_TRACKTO')
         layout.prop(operator, "axis_forward")
         layout.prop(operator, "axis_up")
 
@@ -156,16 +147,32 @@ class ImportGDTF(bpy.types.Operator, ImportHelper):
     fixture_index: IntProperty(
         name="Index",
         description="Fixture start index",
-        min=0, max=10000,
-        soft_min=0, soft_max=10000,
+        min=0, max=100000,
+        soft_min=0, soft_max=100000,
         default=0,
     )
     fixture_count: IntProperty(
         name="Quantity",
         description="Fixture count",
-        min=0, max=1000,
-        soft_min=0, soft_max=1000,
+        min=0, max=10000,
+        soft_min=0, soft_max=10000,
         default=1,
+    )
+    gel_color: FloatVectorProperty(
+        name="Color",
+        description="Fixture gel color",
+        min=0.0, max=1.0,
+        soft_min=0.0, soft_max=1.0,
+        default=[1.0, 1.0, 1.0],
+        subtype='COLOR',
+    )
+    fixture_position: FloatVectorProperty(
+        name="Position",
+        description="Fixture position",
+        min=-10000.0, max=10000.0,
+        soft_min=-10000.0, soft_max=10000.0,
+        default=[0.0, 0.0, 0.0],
+        subtype='TRANSLATION',
     )
     align_objects: FloatProperty(
         name="Align",
@@ -175,6 +182,15 @@ class ImportGDTF(bpy.types.Operator, ImportHelper):
         default=1.0,
         subtype='DISTANCE',
         unit='LENGTH'
+    )
+    align_axis: EnumProperty(
+        name="Axis",
+        items=(('X', "X Align", "Align to Axis X"),
+               ('Y', "Y Align", "Align to Axis Y"),
+               ('Z', "Z Align", "Align to Axis Z"),
+               ),
+        description="Axis for align objects",
+        default='X',
     )
     scale_objects: FloatProperty(
         name="Scale",
@@ -189,9 +205,9 @@ class ImportGDTF(bpy.types.Operator, ImportHelper):
         description="Create a new collection",
         default=False,
     )
-    use_target: BoolProperty(
-        name="Target",
-        description="Use constraint for targets",
+    use_targets: BoolProperty(
+        name="Targets",
+        description="Use constraints for targets",
         default=True,
     )
     use_beams: BoolProperty(
@@ -209,14 +225,15 @@ class ImportGDTF(bpy.types.Operator, ImportHelper):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-
         import_gdtf_include(layout, self)
         import_gdtf_transform(layout, self)
 
     def execute(self, context):
         from . import import_gdtf
-        keywords = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob"))
+        keywords = self.as_keywords(ignore=("fixture_position", "axis_forward", "axis_up", "filter_glob"))
         global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up,).to_4x4()
+        device_position = self.fixture_position if any(self.fixture_position) else None
+        keywords["device_position"] = device_position
         keywords["global_matrix"] = global_matrix
 
         return import_gdtf.load(self, context, **keywords)
@@ -226,15 +243,17 @@ def import_gdtf_include(layout, operator):
     header, body = layout.panel("GDTF_import_include", default_closed=False)
     header.label(text="Include")
     if body:
-        layout.prop(operator, "fixture_index")
-        layout.prop(operator, "fixture_count")
         layrow = layout.row(align=True)
         layrow.prop(operator, "use_collection")
         layrow.label(text="", icon='OUTLINER_COLLECTION' if operator.use_collection else 'GROUP')
+        layout.prop(operator, "fixture_index")
+        layout.prop(operator, "fixture_count")
+        layout.prop(operator, "gel_color")
         layrow = layout.row(align=True)
         layrow.prop(operator, "use_beams")
         layrow.label(text="", icon='OUTLINER_OB_LIGHT' if operator.use_beams else 'LIGHT')
         layrow = layout.row(align=True)
+        layrow.enabled = (operator.use_beams == True)
         layrow.prop(operator, "use_show_cone")
         layrow.label(text="", icon='LIGHT_SPOT' if operator.use_show_cone else 'LIGHT_HEMI')
 
@@ -243,11 +262,13 @@ def import_gdtf_transform(layout, operator):
     header, body = layout.panel("GDTF_import_transform", default_closed=False)
     header.label(text="Transform")
     if body:
+        layout.prop(operator, "fixture_position")
         layout.prop(operator, "align_objects")
+        layout.prop(operator, "align_axis")
         layout.prop(operator, "scale_objects")
         layrow = layout.row(align=True)
-        layrow.prop(operator, "use_target")
-        layrow.label(text="", icon='CON_STRETCHTO' if operator.use_target else 'CON_TRACKTO')
+        layrow.prop(operator, "use_targets")
+        layrow.label(text="", icon='CON_STRETCHTO' if operator.use_targets else 'CON_TRACKTO')
         layout.prop(operator, "axis_forward")
         layout.prop(operator, "axis_up")
 
