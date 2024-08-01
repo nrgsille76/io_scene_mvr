@@ -268,7 +268,7 @@ def extract_gobos_as_sequence(profile, name):
         os.makedirs(sequence_path)
     first = ""
     count = 0
-    for idx, image in enumerate(Path(images_path).rglob("*"), start=1):
+    for idx, image in enumerate(Path(images_path).rglob('*'), start=1):
         destination = Path(sequence_path, f"image_{idx:04}{image.suffix}")
         if idx == 1:
             first = str(destination.resolve())
@@ -280,7 +280,7 @@ def extract_gobos_as_sequence(profile, name):
         sequence = bpy.data.images.load(first)
     else:
         return None
-    sequence["Count"] = count
+    sequence['Count'] = count
     return sequence
 
 
@@ -314,7 +314,7 @@ def join_parts_apply_transforms(objects):
             join += 1
             bpy.context.view_layer.objects.active = ob
             single = ob
-            if ob.data.get('Transform'):  # glb files
+            if ob.data.get('Model Type') == 'glb':
                 ob.data.transform(mb)
         ob.matrix_basis.identity()
     if join > 0:
@@ -511,7 +511,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                 obj['Geometry Type'] = 'Pigtail'
             objectDict[cleanup_name(geometry)] = obj
             mb = obj.matrix_basis.copy()
-            if obj.data.get('Transform'):
+            if obj.data.get('Model Type') == 'glb':
                 obj.data.transform(mb) 
             for cld in obj.children:
                 cld.matrix_local = mb @ cld.matrix_local
@@ -1000,7 +1000,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                                 for child in childs.children_recursive:
                                     child_name = child.name.split('.')[0]
                                     child.name = '%s %d' % (child_name, idx + 1)
-                                    
+
         # Relink constraints
         if TARGETS:
             for obj in model_collection.objects:
