@@ -912,6 +912,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
         for obj in model_collection.objects:
             linkDict[obj.name] = obj
             if obj.type == 'MESH' and obj.get('Geometry Type') == 'Beam':
+                obj.hide_select = True
                 if not len(obj.data.materials):
                     emit_material = bpy.data.materials.new(obj.name + ' ' + obj.get('Geometry Type'))
                     obj.data.materials.append(emit_material)
@@ -921,6 +922,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 emit_shader.emission_strength = 1.0
                 emit_shader.emission_color = gelcolor[:]
             elif obj.parent and obj.type == 'LIGHT':
+                obj.hide_select = True
                 obj['UUID'] = uid
                 obj.matrix_world = obj.matrix_world @ obj.parent.matrix_local.inverted()
                 obj.data.color = gelcolor[:]
@@ -961,6 +963,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
             elif obj.get('Geometry Type') == 'Target':
                 obj.name = index_name(obj.name)
             elif obj.get('Geometry Type') == 'Axis':
+                obj.hide_select = True
                 obj['UUID'] = uid
             elif obj.get('Root Geometry'):
                 ob_name = fixture_name if fixture is None else name
@@ -1045,7 +1048,6 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 obj.hide_set(True)
                 obj.hide_viewport = True
                 obj.hide_render = True
-            obj.hide_select = False
 
 
 def load_gdtf(context, filename, mscale, name, position, focus_point, fixture_id,
