@@ -232,6 +232,7 @@ def extract_gobos(profile, name):
     gobos = []
     folder_path = os.path.join(get_folder_path(), create_fixture_name(name))
     for gobo_name in profile._package.namelist():
+        gobo = None
         if gobo_name.startswith("wheels"):
             short_name = gobo_name.replace("wheels/", "", 1)
             if short_name in bpy.data.images:
@@ -239,8 +240,10 @@ def extract_gobos(profile, name):
             else:
                 profile._package.extract(gobo_name, folder_path)
                 image_path = os.path.join(folder_path, gobo_name)
-                gobo = bpy.data.images.load(image_path)
-            gobos.append(gobo)
+                if os.path.isfile(image_path):
+                    gobo = bpy.data.images.load(image_path)
+            if gobo is not None:
+                gobos.append(gobo)
     return gobos
 
 
@@ -561,9 +564,9 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
 
         obj_child.visible_shadow = False
         light_name = name.split()[-1]
-        light_data = data_lights.get(f"{light_name} {obj_child.name}")
+        light_data = data_lights.get(f"{light_name} {obj_child.name}".split('.')[0])
         if light_data is None or light_data.get('Fixture Name') != light_name:
-            light_data = data_lights.new(f"{light_name} {obj_child.name}", 'SPOT')
+            light_data = data_lights.new(f"{light_name} {obj_child.name}".split('.')[0], 'SPOT')
             create_gdtf_props(light_data, name)
             light_data['Flux'] = geometry.luminous_flux
             light_data.energy = light_data['Flux']
@@ -601,10 +604,14 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                 emit = nodes.get('Emission')
                 emit.label = 'Fixture'
                 emit.location = (80, 300)
-                lightpath = nodes.new(type='ShaderNodeLightPath')
-                lightfalloff = nodes.new(type='ShaderNodeLightFalloff')
-                lightpath.location = (-1140, 180)
-                lightfalloff.location = (-720, 60)
+                lightpath = nodes.get('Light Path', False)
+                if not lightpath:
+                    lightpath = nodes.new(type='ShaderNodeLightPath')
+                    lightpath.location = (-1140, 180)
+                lightfalloff = nodes.get('Light Falloff', False)
+                if not lightfalloff:
+                    lightfalloff = nodes.new(type='ShaderNodeLightFalloff')
+                    lightfalloff.location = (-720, 60)
                 emit.inputs[0].default_value[:3] = light_data.color
                 links.new(emit.outputs[0], nodes['Light Output'].inputs[0])
                 links.new(lightpath.outputs[7], lightfalloff.inputs[1])
@@ -635,6 +642,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         obj.name = obj.data.name = goboGeometry.name
         objectDict[cleanup_name(goboGeometry)] = obj
         obj.location[2] += -0.01
+        obj.hide_select = True
         constraint_child_to_parent(geometry, goboGeometry)
 
     def calculate_spot_blend(geometry):
@@ -785,7 +793,6 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         obj.show_in_front = True
         if obj.active_material.grease_pencil:
             obj.active_material.grease_pencil.show_stroke = True
-        obj.data.pixel_factor = 2
 
         # Add constraints
         constraint_copyLocation = obj.constraints.new(type='COPY_LOCATION')
@@ -931,26 +938,40 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                     nodes = obj.data.node_tree.nodes
                     links = obj.data.node_tree.links
                     emit = nodes.get('Emission')
-                    mix = nodes.new(type='ShaderNodeMixRGB')
-                    rgb = nodes.new(type='ShaderNodeRGB')
-                    mix.blend_type = 'DARKEN'
-                    mix.location = (-140, 340)
-                    rgb.location = (-380, 100)
+                    mix = nodes.get('Color Mix', False)
+                    if not mix:
+                        mix = nodes.new(type='ShaderNodeMixRGB')
+                        mix.location = (-140, 340)
+                        mix.blend_type = 'DARKEN'
+                        mix.label = mix.name = 'Color Mix'
+                    rgb = nodes.get('RGB', False)
+                    if not rgb:
+                        rgb = nodes.new(type='ShaderNodeRGB')
+                        rgb.location = (-380, 100)
                     mix.inputs[2].default_value[:3] = rgb.outputs[0].default_value[:3] = gelcolor[:]
-                    gobo_node = nodes.new(type='ShaderNodeTexImage')
-                    rota_node = nodes.new(type='ShaderNodeVectorRotate')
-                    cord_node = nodes.new(type='ShaderNodeTexCoord')
-                    norm_node = nodes.new(type='ShaderNodeNormal')
+                    gobo_node = nodes.get('Gobo', False)
+                    if not gobo_node:
+                        gobo_node = nodes.new(type='ShaderNodeTexImage')
+                        gobo_node.label = gobo_node.name = 'Gobo'
+                        gobo_node.location = (-480, 440)
+                    rota_node = nodes.get('Gobo Rotate', False)
+                    if not rota_node:
+                        rota_node = nodes.new(type='ShaderNodeVectorRotate')
+                        rota_node.inputs[1].default_value[:2] = [0.5] * 2
+                        rota_node.label = rota_node.name = 'Gobo Rotate'
+                        rota_node.rotation_type = 'Z_AXIS'
+                        rota_node.location = (-720, 440)
+                    cord_node = nodes.get('Gobo Coordinate', False)
+                    if not cord_node:
+                        cord_node = nodes.new(type='ShaderNodeTexCoord')
+                        cord_node.label = cord_node.name = 'Gobo Coordinate'
+                        cord_node.location = (-1140, 440)
+                    norm_node = nodes.get('Normal', False)
+                    if not norm_node:
+                        norm_node = nodes.new(type='ShaderNodeNormal')
+                        norm_node.location = (-940, 400)
                     gobo_image = random.choice(gobos)
                     gobo_node.image = gobo_image
-                    gobo_node.label = 'Gobo: ' + gobo_image.name
-                    cord_node.label = 'Gobo Coordinate'
-                    rota_node.rotation_type = 'Z_AXIS'
-                    rota_node.inputs[1].default_value[:2] = [0.5] * 2
-                    gobo_node.location = (-480, 440)
-                    rota_node.location = (-720, 440)
-                    norm_node.location = (-940, 400)
-                    cord_node.location = (-1140, 440)
                     lightfalloff = nodes.get('Light Falloff')
                     links.new(rota_node.outputs[0], gobo_node.inputs[0])
                     links.new(cord_node.outputs[2], rota_node.inputs[0])
