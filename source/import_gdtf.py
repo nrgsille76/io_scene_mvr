@@ -77,6 +77,16 @@ def create_fixture_name(name):
     return clean_name
 
 
+def create_gdtf_props(item, name):
+    split_name = name.split()
+    if len(split_name) > 1:
+        fixture_name = split_name[1]
+        item['Company'] = split_name[0]
+    else:
+        fixture_name = name
+    item['Fixture Name'] = fixture_name
+
+
 def create_transform_property(obj):
     mtx_copy = obj.matrix_basis.copy()
     translate = mtx_copy.to_translation()
@@ -217,8 +227,8 @@ def load_blender_primitive(model):
 def load_gdtf_primitive(model):
     primitive = str(model.primitive_type)
     primitive_path = os.path.join(get_folder_path(), "primitives")
-    path = os.path.join(primitive_path, f"{primitive}.glb")
-    bpy.ops.import_scene.gltf(filepath=path)
+    path = os.path.join(primitive_path, f"{primitive}.3ds")
+    load_3ds(path, bpy.context, FILTER={'MESH'}, KEYFRAME=False, APPLY_MATRIX=False)
     obj = bpy.context.view_layer.objects.selected[0]
     obj.users_collection[0].objects.unlink(obj)
     obj.data.transform(mathutils.Matrix.Diagonal((model.length / obj.dimensions.x,
@@ -387,15 +397,6 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         dmx_mode = profile.dmx_modes[0]
         mode = dmx_mode.name
 
-    def create_gdtf_props(item, name):
-        split_name = name.split()
-        if len(split_name) > 1:
-            fixture_name = split_name[1]
-            item['Company'] = split_name[0]
-        else:
-            fixture_name = name
-        item['Fixture Name'] = fixture_name
-
     collection['Fixture ID'] = fixture_id
     create_gdtf_props(collection, name)
     collection['UUID'] = uid
@@ -554,10 +555,8 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
     def create_beam(geometry):
         default_factor = 1000
         data_lights = bpy.data.lights
-        if cleanup_name(geometry) not in objectDict:
-            return
-        obj_child = objectDict[cleanup_name(geometry)]
-        if not BEAMS:
+        obj_child = objectDict.get(cleanup_name(geometry))
+        if not BEAMS or obj_child is None:
             return
         if any(geometry.beam_type.value == x for x in ['None', 'Glow']):
             return
@@ -606,11 +605,11 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                 emit.location = (80, 300)
                 lightpath = nodes.get('Light Path', False)
                 if not lightpath:
-                    lightpath = nodes.new(type='ShaderNodeLightPath')
+                    lightpath = nodes.new('ShaderNodeLightPath')
                     lightpath.location = (-1140, 180)
                 lightfalloff = nodes.get('Light Falloff', False)
                 if not lightfalloff:
-                    lightfalloff = nodes.new(type='ShaderNodeLightFalloff')
+                    lightfalloff = nodes.new('ShaderNodeLightFalloff')
                     lightfalloff.location = (-720, 60)
                 emit.inputs[0].default_value[:3] = light_data.color
                 links.new(emit.outputs[0], nodes['Light Output'].inputs[0])
@@ -635,6 +634,8 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
             obj = bpy.data.objects.new(goboGeometry.name, msh)
         else:
             obj = load_blender_primitive(goboGeometry)
+            obj.data['UUID'] = fixturetype_id
+        create_gdtf_props(obj, name)
         obj['Geometry Class'] = obj.data['Geometry Class'] = geometry_class     
         obj['Geometry Type'] = obj.data['Geometry Type'] = 'Gobo'
         obj['Radius'] = obj.data['Radius'] = goboGeometry.beam_radius
@@ -750,7 +751,12 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
             check_parent = obj.parent and obj.parent.get('Mobile Axis') == 'Tilt'
             check_pan = obj.get('Mobile Axis') == 'Pan'
             check_tilt = obj.get('Mobile Axis') == 'Tilt'
-            constraint = obj.constraints.new('LOCKED_TRACK')
+            if not len(base.constraints) and (check_pan and not len(obj.children) or (not check_pan and not check_tilt)):
+                constraint = base.constraints.new('TRACK_TO')
+                constraint.target = main_target
+                continue
+            else:
+                constraint = obj.constraints.new('LOCKED_TRACK')
             if check_tilt or check_parent and obj.parent.parent and obj.parent.parent.get('Mobile Axis') == 'Pan':
                 constraint.track_axis = 'TRACK_NEGATIVE_Z'
             else:
@@ -778,10 +784,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                             obj_target.location = (obj.parent.location.x, obj.parent.location.y, 0)
                         create_transform_property(obj_target)
                         constraint.target = obj_target
-            if check_pan and not len(obj.children):
-                constraint = base.constraints.new('TRACK_TO')
-                constraint.target = main_target
-        if not yokes and not heads:
+        if not yokes and not heads and not len(base.constraints):
             constraint = base.constraints.new('TRACK_TO')
             constraint.target = main_target
     
@@ -795,8 +798,8 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
             obj.active_material.grease_pencil.show_stroke = True
 
         # Add constraints
-        constraint_copyLocation = obj.constraints.new(type='COPY_LOCATION')
-        constraint_copyRotation = obj.constraints.new(type='COPY_ROTATION')
+        constraint_copyLocation = obj.constraints.new('COPY_LOCATION')
+        constraint_copyRotation = obj.constraints.new('COPY_ROTATION')
         constraint_copyLocation.target = base
         constraint_copyRotation.target = base
         constraint_copyRotation.use_z = True
@@ -906,19 +909,123 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
         principled_shader = PrincipledBSDFWrapper(gobo_material, is_readonly=False, use_nodes=True)
         gobo_seq = extract_gobos_as_sequence(gdtf_profile, name)
         if gobo_seq is not None:
-            gobo = bpy.data.images.new('Gobo')
+            gobo = random.choice(gobo_seq)
     if 'Gobo' not in bpy.data.images:
         has_gobos = False
 
     linkDict = {}
     base = get_root_model(model_collection)
     head = get_tilt(model_collection, channels)
+    gobos = extract_gobos(gdtf_profile, name)
+    random_gobo = random.choice(gobos) if len(gobos) else None
 
     if model_collection:
         print("creating fixture... %s" % model_collection.name)
+        gobo_material = next((mtl for mtl in bpy.data.materials if
+                              mtl.get('Geometry Type') == 'Gobo' and
+                              mtl.get('UUID') == uid), False)
         for obj in model_collection.objects:
             linkDict[obj.name] = obj
-            if obj.type == 'MESH' and obj.get('Geometry Type') == 'Beam':
+            if obj.get('Geometry Type') == 'Gobo':
+                obj.scale = (1.0, 1.0, 1.0)
+                if not gobo_material:
+                    gobo_material = bpy.data.materials.new('%s %s' % (obj.get('Fixture Name'), obj.name))
+                    create_gdtf_props(gobo_material, fixture_name)
+                    gobo_material['Geometry Type'] = 'Gobo'
+                    gobo_material['UUID'] = uid
+                    obj.data.materials.append(gobo_material)
+                gobo_material.shadow_method = 'CLIP'
+                gobo_material.blend_method = 'BLEND'
+                if not gobo_material.use_nodes:
+                    gobo_material.use_nodes = True
+                    gobo_nodes = gobo_material.node_tree.nodes
+                    gobo_links = gobo_material.node_tree.links
+                    material_node = gobo_nodes.get('Material Output')
+                    principled_bsdf = gobo_nodes.get('Principled BSDF')
+                    gobo_nodes.remove(principled_bsdf)
+                    opacity_node = gobo_nodes.new('ShaderNodeBsdfTransparent')
+                    opacity_node.label = opacity_node.name = 'Gobo Shader'
+                    gobo_node = gobo_nodes.new('ShaderNodeTexImage')
+                    gobo_rota = gobo_nodes.new('ShaderNodeVectorRotate')
+                    gobo_norm = gobo_nodes.new('ShaderNodeNormal')
+                    gobo_cord = gobo_nodes.new('ShaderNodeTexCoord')
+                    gobo_node.label = gobo_node.name = 'Gobo'
+                    gobo_rota.label = gobo_rota.name = 'Gobo Rotate'
+                    gobo_cord.label = gobo_cord.name = 'Gobo Coordinate'
+                    gobo_rota.inputs[1].default_value[:2] = [0.5] * 2
+                    gobo_node.image = random_gobo
+                    gobo_rota.rotation_type = 'Z_AXIS'
+                    opacity_node.location = (60, 300)
+                    gobo_node.location = (-260, 340)
+                    gobo_rota.location = (-500, 340)
+                    gobo_norm.location = (-720, 300)
+                    gobo_cord.location = (-920, 340)
+                    gobo_links.new(opacity_node.outputs[0], material_node.inputs[0])
+                    gobo_links.new(gobo_node.outputs[0], opacity_node.inputs[0])
+                    gobo_links.new(gobo_rota.outputs[0], gobo_node.inputs[0])
+                    gobo_links.new(gobo_cord.outputs[2], gobo_rota.inputs[0])
+                    gobo_links.new(gobo_cord.outputs[1], gobo_norm.inputs[0])
+                    gobo_links.new(gobo_norm.outputs[1], gobo_rota.inputs[3])
+            if obj.parent and obj.type == 'LIGHT':
+                obj.hide_select = True
+                obj['UUID'] = uid
+                obj.matrix_world = obj.matrix_world @ obj.parent.matrix_local.inverted()
+                obj.data.color = gelcolor[:]
+                if len(gobos):
+                    light_image = None
+                    if gobo_material and gobo_material.use_nodes:
+                        gobo_node = gobo_material.node_tree.nodes.get('Gobo')
+                        if gobo_node:
+                            light_image = gobo_node.image
+                    if light_image is None:
+                        light_image = random_gobo
+                    nodes = obj.data.node_tree.nodes
+                    links = obj.data.node_tree.links
+                    emit = nodes.get('Emission')
+                    rgb = nodes.get('RGB', False)
+                    mix = nodes.get('Color Mix', False)
+                    gobo_node = nodes.get('Gobo', False)
+                    norm_node = nodes.get('Normal', False)
+                    lightfalloff = nodes.get('Light Falloff')
+                    rota_node = nodes.get('Gobo Rotate', False)
+                    cord_node = nodes.get('Gobo Coordinate', False)
+                    if not mix:
+                        mix = nodes.new(type='ShaderNodeMixRGB')
+                        mix.location = (-140, 340)
+                        mix.blend_type = 'DARKEN'
+                        mix.label = mix.name = 'Color Mix'
+                    if not rgb:
+                        rgb = nodes.new('ShaderNodeRGB')
+                        rgb.location = (-380, 100)
+                    if not gobo_node:
+                        gobo_node = nodes.new('ShaderNodeTexImage')
+                        gobo_node.label = gobo_node.name = 'Gobo'
+                        gobo_node.location = (-480, 440)
+                    if not rota_node:
+                        rota_node = nodes.new('ShaderNodeVectorRotate')
+                        rota_node.inputs[1].default_value[:2] = [0.5] * 2
+                        rota_node.label = rota_node.name = 'Gobo Rotate'
+                        rota_node.rotation_type = 'Z_AXIS'
+                        rota_node.location = (-720, 440)
+                        rota_node.invert = True
+                    if not cord_node:
+                        cord_node = nodes.new('ShaderNodeTexCoord')
+                        cord_node.label = cord_node.name = 'Gobo Coordinate'
+                        cord_node.location = (-1140, 440)
+                    if not norm_node:
+                        norm_node = nodes.new('ShaderNodeNormal')
+                        norm_node.location = (-940, 400)
+                    gobo_node.image = light_image
+                    mix.inputs[2].default_value[:3] = rgb.outputs[0].default_value[:3] = gelcolor[:]
+                    links.new(rota_node.outputs[0], gobo_node.inputs[0])
+                    links.new(cord_node.outputs[2], rota_node.inputs[0])
+                    links.new(norm_node.outputs[1], rota_node.inputs[3])
+                    links.new(cord_node.outputs[1], norm_node.inputs[0])
+                    links.new(lightfalloff.outputs[1], mix.inputs[0])
+                    links.new(gobo_node.outputs[0], mix.inputs[1])
+                    links.new(rgb.outputs[0], mix.inputs[2])
+                    links.new(mix.outputs[0], emit.inputs[0])
+            elif obj.type == 'MESH' and obj.get('Geometry Type') == 'Beam':
                 obj.hide_select = True
                 if not len(obj.data.materials):
                     emit_material = bpy.data.materials.new(obj.name + ' ' + obj.get('Geometry Type'))
@@ -928,59 +1035,6 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 emit_shader = PrincipledBSDFWrapper(emitter, is_readonly=False, use_nodes=True)
                 emit_shader.emission_strength = 1.0
                 emit_shader.emission_color = gelcolor[:]
-            elif obj.parent and obj.type == 'LIGHT':
-                obj.hide_select = True
-                obj['UUID'] = uid
-                obj.matrix_world = obj.matrix_world @ obj.parent.matrix_local.inverted()
-                obj.data.color = gelcolor[:]
-                gobos = extract_gobos(gdtf_profile, name)
-                if len(gobos):
-                    nodes = obj.data.node_tree.nodes
-                    links = obj.data.node_tree.links
-                    emit = nodes.get('Emission')
-                    mix = nodes.get('Color Mix', False)
-                    if not mix:
-                        mix = nodes.new(type='ShaderNodeMixRGB')
-                        mix.location = (-140, 340)
-                        mix.blend_type = 'DARKEN'
-                        mix.label = mix.name = 'Color Mix'
-                    rgb = nodes.get('RGB', False)
-                    if not rgb:
-                        rgb = nodes.new(type='ShaderNodeRGB')
-                        rgb.location = (-380, 100)
-                    mix.inputs[2].default_value[:3] = rgb.outputs[0].default_value[:3] = gelcolor[:]
-                    gobo_node = nodes.get('Gobo', False)
-                    if not gobo_node:
-                        gobo_node = nodes.new(type='ShaderNodeTexImage')
-                        gobo_node.label = gobo_node.name = 'Gobo'
-                        gobo_node.location = (-480, 440)
-                    rota_node = nodes.get('Gobo Rotate', False)
-                    if not rota_node:
-                        rota_node = nodes.new(type='ShaderNodeVectorRotate')
-                        rota_node.inputs[1].default_value[:2] = [0.5] * 2
-                        rota_node.label = rota_node.name = 'Gobo Rotate'
-                        rota_node.rotation_type = 'Z_AXIS'
-                        rota_node.location = (-720, 440)
-                    cord_node = nodes.get('Gobo Coordinate', False)
-                    if not cord_node:
-                        cord_node = nodes.new(type='ShaderNodeTexCoord')
-                        cord_node.label = cord_node.name = 'Gobo Coordinate'
-                        cord_node.location = (-1140, 440)
-                    norm_node = nodes.get('Normal', False)
-                    if not norm_node:
-                        norm_node = nodes.new(type='ShaderNodeNormal')
-                        norm_node.location = (-940, 400)
-                    gobo_image = random.choice(gobos)
-                    gobo_node.image = gobo_image
-                    lightfalloff = nodes.get('Light Falloff')
-                    links.new(rota_node.outputs[0], gobo_node.inputs[0])
-                    links.new(cord_node.outputs[2], rota_node.inputs[0])
-                    links.new(norm_node.outputs[1], rota_node.inputs[3])
-                    links.new(cord_node.outputs[6], norm_node.inputs[0])
-                    links.new(lightfalloff.outputs[1], mix.inputs[0])
-                    links.new(gobo_node.outputs[0], mix.inputs[1])
-                    links.new(rgb.outputs[0], mix.inputs[2])
-                    links.new(mix.outputs[0], emit.inputs[0])
             elif obj.get('Geometry Type') == 'Target':
                 obj.name = index_name(obj.name)
             elif obj.get('Geometry Type') == 'Axis':
@@ -1000,17 +1054,12 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                     linkDict[child.name].parent = obj
                 child.name = index_name(child.name)
             if obj.type == 'MESH' and len(obj.data.materials):
-                for mtl in obj.data.materials:
-                    ob_name = obj.name.split()
-                    if fixture is None:
-                        obj_name = ob_name[-1]
-                    elif len(ob_name) > 1:
-                        obj_name = ob_name[-2]
-                    else:
-                        obj_name = ob_name[0]
-                    split_name = mtl.name.split('.')[0]
-                    obj_material = '%s_%s' % (obj_name, split_name)
-                    mtl.name = index_name(obj_material)
+                if obj.get('Geometry Type') != 'Gobo':
+                    for mtl in obj.data.materials:
+                        obj_name = obj.get('Fixture Name', obj.name)
+                        split_name = mtl.name.split('.')[0]
+                        mtl_name = split_name.split('_')[-1]
+                        mtl.name = '%s_%s' % (obj_name, mtl_name)
             if obj.get('Root Geometry'):
                 for parents in obj.children_recursive:
                     if len(parents.children) > 1:
@@ -1048,16 +1097,6 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 if obj.get('Geometry Type') == 'Target':
                     obj.matrix_world = focus_point
                     create_transform_property(obj)
-
-        # Setup emitter
-        for obj in model_collection.objects:
-            if 'Gobo' in obj.get('Geometry Type', ""):
-                gobo_material = bpy.data.materials.new(index_name(obj.name))
-                obj.active_material = gobo_material
-                obj.active_material.shadow_method = 'CLIP'
-                obj.active_material.blend_method = 'BLEND'
-                obj.material_slots[0].link = 'OBJECT'
-                obj.material_slots[0].material = gobo_material
 
         # Link collection to layer collection
         if collect is None and model_collection.name not in layer_collect.collection.children:
