@@ -303,16 +303,13 @@ def load_2d(profile, name):
     obj = None
     if filename in profile._package.namelist():
         profile._package.extract(filename, folder_path)
-    else:
-        folder_path = os.path.join(get_folder_path(), "primitives")
-        filename = "thumbnail.svg"
-
-    bpy.ops.wm.gpencil_import_svg(filepath="", directory=folder_path, files=[{"name": filename}], scale=1)
-    if len(bpy.context.view_layer.objects.selected):
-        obj = bpy.context.view_layer.objects.selected[0]
+        bpy.ops.wm.gpencil_import_svg(filepath="", directory=folder_path, files=[{"name": filename}], scale=1)
+        if len(bpy.context.view_layer.objects.selected):
+            obj = bpy.context.view_layer.objects.selected[0]
     if obj is not None:
         obj.name = '2D Symbol'
-        obj.users_collection[0].objects.unlink(obj)
+        if len(obj.users_collection):
+            obj.users_collection[0].objects.unlink(obj)
         obj.rotation_euler[0] = math.radians(-90)
     return obj
 
@@ -411,7 +408,6 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
 
     def load_geometries(geometry):
         """Load 3d models, primitives and shapes"""
-        #print(f"loading geometry {geometry.name}")
 
         data_meshes = bpy.data.meshes
         data_objects = bpy.data.objects
@@ -419,8 +415,8 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         geometry_class = geometry.__class__.__name__
         geometry_type = get_geometry_type_as_string(geometry)
         if geometry_class == 'GeometryBeam':
-            if str(geometry.beam_type.value) in ['None' 'Glow']:
-                geometry_name = 'Glow'
+            if any(geometry.beam_type.value == x for x in ['None', 'Glow']):
+                geometry_type = 'Glow'
         for ob in data_objects:
             ob.select_set(False)
         if isinstance(geometry, pygdtf.GeometryReference):
@@ -510,6 +506,8 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                 obj.hide_select = True
             if isinstance(geometry, pygdtf.GeometryReference):
                 obj['Reference'] = str(geometry.geometry)
+            elif hasattr(geometry, "reference_root"):
+                obj['Reference'] = getattr(geometry, "reference_root")
             if str(model.primitive_type) == 'Pigtail':
                 obj['Geometry Type'] = 'Pigtail'
             objectDict[cleanup_name(geometry)] = obj
@@ -522,6 +520,9 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
 
         if hasattr(geometry, "geometries"):
             for sub_geometry in geometry.geometries:
+                if hasattr(geometry, "reference_root"):
+                    root_reference = getattr(geometry, "reference_root")
+                    setattr(sub_geometry, "reference_root", root_reference)
                 load_geometries(sub_geometry)
 
     def get_geometry_type_as_string(geometry):
@@ -556,6 +557,8 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         default_factor = 1000
         data_lights = bpy.data.lights
         obj_child = objectDict.get(cleanup_name(geometry))
+        child_name = obj_child.get('Original Name', obj_child.name.split('.')[0])
+        light_reference = obj_child.get('Reference', obj_child.name.split('.')[0])
         if not BEAMS or obj_child is None:
             return
         if any(geometry.beam_type.value == x for x in ['None', 'Glow']):
@@ -563,9 +566,9 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
 
         obj_child.visible_shadow = False
         light_name = name.split()[-1]
-        light_data = data_lights.get(f"{light_name} {obj_child.name}".split('.')[0])
+        light_data = data_lights.get(f"{light_name} {child_name}")
         if light_data is None or light_data.get('Fixture Name') != light_name:
-            light_data = data_lights.new(f"{light_name} {obj_child.name}".split('.')[0], 'SPOT')
+            light_data = data_lights.new(f"{light_name} {child_name}", 'SPOT')
             create_gdtf_props(light_data, name)
             light_data['Flux'] = geometry.luminous_flux
             light_data.energy = light_data['Flux']
@@ -577,12 +580,11 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
             light_data.spot_size = math.radians(geometry.beam_angle)
             light_data.shadow_soft_size = geometry.beam_radius * 0.1
             light_data['Radius'] = geometry.beam_radius
-            light_data['Gobo'] = True
             light_data['UUID'] = fixturetype_id
             light_data.shadow_buffer_clip_start = 0.0001
             if CONES:
                 light_data.show_cone = True
-        light_object = bpy.data.objects.new('Spot', light_data)
+        light_object = bpy.data.objects.new('%s_Spot' % light_reference, light_data)
         light_object.hide_select = True
         light_object.parent = obj_child
         create_gdtf_props(light_object, name)
@@ -595,6 +597,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         goboGeometry = SimpleNamespace(name=f"Gobo {geometry}", length=gobo_radius, width=gobo_radius,
                                        height=0, primitive_type='Plane', beam_radius=geometry.beam_radius)
         if has_gobos:
+            light_data['Gobo'] = True
             create_gobo(geometry, goboGeometry)
             if not light_data.use_nodes:
                 light_data.use_nodes = True
@@ -603,15 +606,11 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                 emit = nodes.get('Emission')
                 emit.label = 'Fixture'
                 emit.location = (80, 300)
-                lightpath = nodes.get('Light Path', False)
-                if not lightpath:
-                    lightpath = nodes.new('ShaderNodeLightPath')
-                    lightpath.location = (-1140, 180)
-                lightfalloff = nodes.get('Light Falloff', False)
-                if not lightfalloff:
-                    lightfalloff = nodes.new('ShaderNodeLightFalloff')
-                    lightfalloff.location = (-720, 60)
                 emit.inputs[0].default_value[:3] = light_data.color
+                lightpath = nodes.new('ShaderNodeLightPath')
+                lightfalloff = nodes.new('ShaderNodeLightFalloff')
+                lightpath.location = (-1140, 180)
+                lightfalloff.location = (-720, 60)
                 links.new(emit.outputs[0], nodes['Light Output'].inputs[0])
                 links.new(lightpath.outputs[7], lightfalloff.inputs[1])
                 links.new(lightpath.outputs[8], lightfalloff.inputs[0])
@@ -642,7 +641,6 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         obj.dimensions = (goboGeometry.length, goboGeometry.width, 0)
         obj.name = obj.data.name = goboGeometry.name
         objectDict[cleanup_name(goboGeometry)] = obj
-        obj.location[2] += -0.01
         obj.hide_select = True
         constraint_child_to_parent(geometry, goboGeometry)
 
@@ -676,7 +674,6 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
     def update_geometry(geometry):
         """Recursively update objects position, rotation and scale
         and define parent/child constraints."""
-
         if not isinstance(geometry, pygdtf.GeometryReference):
             add_child_position(geometry)
         if isinstance(geometry, pygdtf.GeometryBeam):
@@ -708,12 +705,15 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         if hasattr(geometry, "geometries"):
             if len(geometry.geometries) > 0:
                 for child_geometry in geometry.geometries:
+                    if hasattr(geometry, "reference_root"):
+                        root_reference = getattr(geometry, "reference_root")
+                        setattr(child_geometry, "reference_root", root_reference)
                     constraint_child_to_parent(geometry, child_geometry)
                     update_geometry(child_geometry)
 
     load_geometries(root_geometry)
     update_geometry(root_geometry)
-        
+
     def get_axis_objects(attribute):
         axis_objects = []
         for obj in objectDict.values():
@@ -794,7 +794,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         obj['2D Symbol'] = "all"
         objectDict['2D Symbol'] = obj
         obj.show_in_front = True
-        if obj.active_material.grease_pencil:
+        if obj.active_material and obj.active_material.grease_pencil:
             obj.active_material.grease_pencil.show_stroke = True
 
         # Add constraints
@@ -808,7 +808,8 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
 
     # Link objects to collection
     for name, obj in objectDict.items():
-        collection.objects.link(obj)
+        if name not in collection.objects:
+            collection.objects.link(obj)
     
     objectDict.clear()
     return collection
@@ -918,14 +919,24 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
     head = get_tilt(model_collection, channels)
     gobos = extract_gobos(gdtf_profile, name)
     random_gobo = random.choice(gobos) if len(gobos) else None
+    gobo_material = next((mtl for mtl in bpy.data.materials if
+                          mtl.get('Geometry Type') == 'Gobo' and
+                          mtl.get('UUID') == uid), False)
 
     if model_collection:
+        if collect is None and model_collection.name not in layer_collect.collection.children:
+            layer_collect.collection.children.link(model_collection)
         print("creating fixture... %s" % model_collection.name)
-        gobo_material = next((mtl for mtl in bpy.data.materials if
-                              mtl.get('Geometry Type') == 'Gobo' and
-                              mtl.get('UUID') == uid), False)
         for obj in model_collection.objects:
             linkDict[obj.name] = obj
+            if TARGETS and len(obj.constraints):
+                target = obj.get('Target')
+                for child in obj.children:
+                    if len(child.constraints) and child.constraints[0].target is None:
+                        child.constraints[0].target = obj.constraints[0].target
+                if target is not None:
+                    for constraint in obj.constraints:
+                        constraint.target = targetData.get(target)
             if obj.get('Geometry Type') == 'Gobo':
                 obj.scale = (1.0, 1.0, 1.0)
                 if not gobo_material:
@@ -1028,24 +1039,41 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
             elif obj.type == 'MESH' and obj.get('Geometry Type') == 'Beam':
                 obj.hide_select = True
                 if not len(obj.data.materials):
-                    emit_material = bpy.data.materials.new(obj.name + ' ' + obj.get('Geometry Type'))
+                    emit_material = bpy.data.materials.new(obj.name + ' ' + 'Beam')
                     obj.data.materials.append(emit_material)
                 emitter = obj.active_material
                 emitter.shadow_method = "NONE"
                 emit_shader = PrincipledBSDFWrapper(emitter, is_readonly=False, use_nodes=True)
                 emit_shader.emission_strength = 1.0
                 emit_shader.emission_color = gelcolor[:]
+            elif obj.type == 'MESH' and obj.get('Geometry Type') == 'Glow':
+                obj.hide_select = True
+                if not len(obj.data.materials):
+                    glow_material = bpy.data.materials.new(obj.name + ' ' + 'Glow')
+                    obj.data.materials.append(glow_material)
+                active_glow = obj.active_material
+                active_glow.shadow_method = "NONE"
+                glow_shader = PrincipledBSDFWrapper(active_glow, is_readonly=False, use_nodes=True)
+                glow_shader.emission_strength = 1.0
+                glow_shader.emission_color = glow_shader.base_color[:]
             elif obj.get('Geometry Type') == 'Target':
                 obj.name = index_name(obj.name)
+                obj.matrix_world = focus_point
+                create_transform_property(obj)
             elif obj.get('Geometry Type') == 'Axis':
                 obj.hide_select = True
                 obj['UUID'] = uid
             elif obj.get('Root Geometry'):
                 ob_name = fixture_name if fixture is None else name
-                obj['UUID'] = uid
+                obj.matrix_world = position @ obj.matrix_world.copy()
                 obj.name = index_name(ob_name)
+                create_transform_property(obj)
+                obj['UUID'] = uid
             elif obj.get('2D Symbol', None) == "all":
                 obj.name = index_name('2D Symbol')
+                obj.hide_viewport = True
+                obj.hide_render = True
+                obj.hide_set(True)
 
         # Reparent children
         for obj in model_collection.objects:
@@ -1053,7 +1081,9 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 if child.name in linkDict:
                     linkDict[child.name].parent = obj
                 child.name = index_name(child.name)
-            if obj.type == 'MESH' and len(obj.data.materials):
+            if obj.type == 'LIGHT':
+                obj.location.z = 0.01
+            elif obj.type == 'MESH' and len(obj.data.materials):
                 if obj.get('Geometry Type') != 'Gobo':
                     for mtl in obj.data.materials:
                         obj_name = obj.get('Fixture Name', obj.name)
@@ -1072,42 +1102,6 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                                 for child in childs.children_recursive:
                                     child_name = child.name.split('.')[0]
                                     child.name = '%s %d' % (child_name, idx + 1)
-
-        # Relink constraints
-        if TARGETS:
-            for obj in model_collection.objects:
-                target = obj.get('Target')
-                if len(obj.constraints):
-                    for child in obj.children:
-                        if len(child.constraints) and child.constraints[0].target is None:
-                            child.constraints[0].target = obj.constraints[0].target
-                if target is not None:
-                    for constraint in obj.constraints:
-                        constraint.target = targetData.get(target)
-
-        # Set position
-        for obj in model_collection.objects:
-            if obj.get('Root Geometry', False):
-                obj.matrix_world = position @ obj.matrix_world.copy()
-                create_transform_property(obj)
-
-        # Set target position
-        if focus_point is not None:
-            for obj in model_collection.objects:
-                if obj.get('Geometry Type') == 'Target':
-                    obj.matrix_world = focus_point
-                    create_transform_property(obj)
-
-        # Link collection to layer collection
-        if collect is None and model_collection.name not in layer_collect.collection.children:
-            layer_collect.collection.children.link(model_collection)
-
-        # Set Pigtail visibility and Beam selection
-        for obj in model_collection.objects:
-            if obj.get('2D Symbol', None) == 'all':
-                obj.hide_set(True)
-                obj.hide_viewport = True
-                obj.hide_render = True
 
 
 def load_gdtf(context, filename, mscale, name, position, focus_point, fixture_id,
