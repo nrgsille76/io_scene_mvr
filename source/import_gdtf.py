@@ -91,7 +91,7 @@ def create_dimmer_driver(item, target, power):
     dimmer_curve = item.driver_add(dimmer_val)
     dimmer_drive = dimmer_curve.driver
     dimmer_drive.type = 'SCRIPTED'
-    dimmer_drive.expression = "flux * dim * 0.01" if item.type == 'SPOT' else "dim * 0.01"
+    dimmer_drive.expression = "power * dim * 0.01" if item.type == 'SPOT' else "dim * 0.01"
     dimmer_var = dimmer_drive.variables.new()
     dimmer_var.name = "dim"
     dimmer_target = dimmer_var.targets[0]
@@ -99,10 +99,10 @@ def create_dimmer_driver(item, target, power):
     dimmer_target.data_path = '["Intensity"]'
     if item.type == 'SPOT':
         energy_var = dimmer_drive.variables.new()
-        energy_var.name = "flux"
+        energy_var.name = "power"
         energy_target = energy_var.targets[0]
         energy_target.id = power
-        energy_target.data_path = '["Flux"]'
+        energy_target.data_path = '["Power"]'
 
 
 def create_color_driver(item, target, path):
@@ -163,40 +163,49 @@ def create_gobo_driver(node, target, item=None):
 
 
 def create_trackball_driver(item, target, prop):
-    range_property = item.id_properties_ui("Range")
-    range_data = range_property.as_dict()
-    min_angle = range_data.get("min")
-    max_angle = range_data.get("max")
+    range_data = item.get('Range')
+    min_angle = min(range_data)
+    max_angle = max(range_data)
     check_target = target.get('Target')
     check_pan = item.get('Mobile Axis') == "Pan"
+    max_val = "max_z" if check_pan else "max_x"
+    min_val = "min_z" if check_pan else "min_x"
     path = f'["{prop}"][0]' if check_pan else f'["{prop}"][1]'
-    value = "min_z" if check_pan else "min_x"
     limit = item.constraints.get('Limit Rotation')
     lock = item.constraints.get('Locked Track')
     if limit:
         limit.enabled = check_target
         axis_value = limit.max_z if check_pan else limit.max_x
-        move_curve = limit.driver_add(value)
+        max_curve = limit.driver_add(max_val)
+        min_curve = limit.driver_add(min_val)
         limit_curve = limit.driver_add("influence")
-        move_drive = move_curve.driver
+        max_drive = max_curve.driver
+        min_drive = min_curve.driver
         limit_drive = limit_curve.driver
-        move_drive.type = limit_drive.type = 'SCRIPTED'
-        move_drive.expression = "track * angle"
-        limit_drive.expression = "1.0 if track else 0.0"
-        move_var = move_drive.variables.new()
-        angle_var = move_drive.variables.new()
+        max_drive.type = 'AVERAGE'
+        min_drive.type = limit_drive.type = 'SCRIPTED'
+        min_drive.expression = "track * angle"
+        limit_drive.expression = "1.0 if state else 0.0"
+        max_var = max_drive.variables.new()
+        min_var = min_drive.variables.new()
+        angle_var = min_drive.variables.new()
         limit_var = limit_drive.variables.new()
-        limit_var.name = move_var.name = "track"
+        max_var.name = "range"
+        min_var.name = "track"
         angle_var.name = "angle"
-        move_target = move_var.targets[0]
+        limit_var.name = "state"
+        max_target = max_var.targets[0]
+        min_target = min_var.targets[0]
         limit_target = limit_var.targets[0]
         angle_target = angle_var.targets[0]
-        move_target.id = limit_target.id = angle_target.id = target
-        move_target.data_path = path
+        max_target.id = angle_target.id = item
+        min_target.id = limit_target.id = target
+        min_target.data_path = path
+        max_target.data_path = '["Range"][0]'
+        angle_target.data_path = '["Range"][1]'
         limit_target.data_path = '["Trackball"]'
-        angle_target.use_fallback_value = True
         angle_target.fallback_value = max_angle
-        axis_value = min_angle
+        axis_value = max_target.fallback_value = min_angle
     if lock:
         bool_curve = lock.driver_add("enabled")
         lock_curve = lock.driver_add("influence")
@@ -204,11 +213,11 @@ def create_trackball_driver(item, target, prop):
         lock_drive = lock_curve.driver
         bool_drive.type = 'AVERAGE'
         lock_drive.type = 'SCRIPTED'
-        lock_drive.expression = "0.0 if track else 1.0"
+        lock_drive.expression = "0.0 if state else 1.0"
         bool_var = bool_drive.variables.new()
         lock_var = lock_drive.variables.new()
         bool_var.name = "target"
-        lock_var.name = "track"
+        lock_var.name = "state"
         bool_target = bool_var.targets[0]
         lock_target = lock_var.targets[0]
         bool_target.id = lock_target.id = target
@@ -256,7 +265,7 @@ def create_gobo_property(item, count):
     gobo_property = item.id_properties_ui("Gobo Select")
     angle_property = item.id_properties_ui("Gobo Rotate")
     gobo_property.update(default=0.0, min=0.0, max=count, soft_min=0.0, soft_max=count, precision=1, step=0.1, subtype='LAYER')
-    angle_property.update(default=0.0, min=-360.0, max=360.0, soft_min=-540.0, soft_max=540.0, precision=1, step=1.0, subtype='ANGLE') 
+    angle_property.update(default=0.0, min=-360.0, max=360.0, soft_min=-540.0, soft_max=540.0, precision=0, step=1.0, subtype='ANGLE') 
 
 
 def create_color_property(item, color, prop):
@@ -281,6 +290,13 @@ def create_dimmer_property(item):
     item.id_properties_ensure()
     dimmer_property = item.id_properties_ui('Intensity')
     dimmer_property.update(default=100, min=0, max=100, soft_min=0, soft_max=100, subtype='PERCENTAGE')
+
+
+def create_power_property(item, energy):
+    item['Power'] = energy
+    item.id_properties_ensure()
+    dimmer_property = item.id_properties_ui('Power')
+    dimmer_property.update(default=1000.0, min=0.0, max=100000.0, soft_min=0.0, precision=0, step=1.0, soft_max=100000.0, subtype='POWER')
 
 
 def create_range_property(item, angle, prop, limits=False):
@@ -829,12 +845,12 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
 
 
     def create_beam(geometry):
-        default_factor = 1000
         lightname = name.split()[-1]
         data_lights = bpy.data.lights
         ctc = float(geometry.color_temperature)
         beam_angle = math.radians(geometry.beam_angle)
         obj_child = objectDict.get(cleanup_name(geometry))
+        light_energy = (geometry.luminous_flux / math.sqrt(beam_angle)) * 0.1
         childname = obj_child.get('Original Name', obj_child.name.split('.')[0])
         obj_child['Fixture ID'] = obj_child.data['Fixture ID'] = fixture_id
         obj_child.data.name = '%s_Beam' % name
@@ -870,9 +886,9 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         if light_data is None or light_data.get('Fixture Name') != lightname:
             light_data = data_lights.new(beamname, 'SPOT')
             create_gdtf_props(light_data, name)
-            light_data.energy = geometry.luminous_flux
-            light_data.diffuse_factor = max((default_factor / light_data.energy), 1.0)
-            light_data.specular_factor = max(((default_factor * 2) / light_data.energy), 1.0)
+            light_data.energy = light_energy
+            light_data.volume_factor = light_energy * 0.005
+            light_data.diffuse_factor = light_energy * 0.001
             light_data.use_custom_distance = True
             light_data.cutoff_distance = 23
             light_data.spot_blend = calculate_spot_blend(geometry)
@@ -887,10 +903,13 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         light_object.hide_select = True
         light_object.parent = obj_child
         create_gdtf_props(light_object, name)
-        light_object['Focus'] = light_data['Focus'] = beam_angle
         light_object['Geometry Class'] = geometry.__class__.__name__
-        light_object['Flux'] = light_data['Flux'] = obj_child['Flux'] = geometry.luminous_flux
-        light_object['Light CTC'] = light_data['Temperature'] = obj_child['Temperature'] = ctc
+        create_power_property(obj_child, light_energy)
+        create_power_property(light_object, light_energy)
+        create_power_property(light_data, light_energy)
+        create_ctc_property(obj_child, ctc, 'Temperature')
+        create_ctc_property(light_object, ctc, 'Light CTC')
+        create_ctc_property(light_data, ctc, 'Temperature')
         light_object['Radius'] = light_data['Radius'] = obj_child['Radius'] = geometry.beam_radius
         if zoom_range:
             create_range_property(obj_child, zoom_range, 'Range')
@@ -905,64 +924,70 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         gobo_radius = 2.2 * 0.01 * math.tan(math.radians(geometry.beam_angle / 2))
         goboGeometry = SimpleNamespace(name=f"Gobo {geometry}", length=gobo_radius, width=gobo_radius,
                                        height=0, primitive_type='Plane', beam_radius=geometry.beam_radius)
-        if has_gobos:
-            light_data['Gobo'] = True
-            light_data.shadow_buffer_clip_start = 0.001
-            create_gobo(geometry, goboGeometry)
-            if not light_data.use_nodes:
-                light_data.use_nodes = True
-                nodes = light_data.node_tree.nodes
-                links = light_data.node_tree.links
-                emit = nodes.get('Emission')
-                emit.label = emit.name = 'Fixture'
-                light_mix = nodes.new('ShaderNodeMixRGB')
+
+        if not light_data.use_nodes:
+            light_data.use_nodes = True
+            nodes = light_data.node_tree.nodes
+            links = light_data.node_tree.links
+            emit = nodes.get('Emission')
+            emit.label = emit.name = 'Fixture'
+            light_mix = nodes.new('ShaderNodeMixRGB')
+            gamma_node = nodes.new('ShaderNodeGamma')
+            lightpath = nodes.new('ShaderNodeLightPath')
+            light_normal = nodes.new('ShaderNodeNormal')
+            color_temp = nodes.new('ShaderNodeBlackbody')
+            light_uv = nodes.new('ShaderNodeNewGeometry')
+            
+            layerweight = nodes.new('ShaderNodeLayerWeight')
+            lightfalloff = nodes.new('ShaderNodeLightFalloff')
+            lightcontrast = nodes.new('ShaderNodeBrightContrast')
+            light_uv.label = light_uv.name = 'Light Orientation'
+            color_temp.label = color_temp.name = 'Color Temperature'
+            lightcontrast.label = lightcontrast.name = 'Light Contrast'
+            light_mix.blend_type = 'SOFT_LIGHT'
+            emit.location = (100, 300)
+            light_mix.location = (-100, 360)
+            light_uv.location = (-1360, 300)
+            lightpath.location = (-980, 240)
+            gamma_node.location = (-500, 360)
+            color_temp.location = (-300, 200)
+            layerweight.location = (-980, 400)
+            lightfalloff.location = (-500, 240)
+            lightcontrast.location = (-300, 360)
+            light_normal.location = (-1180, 400)
+            color_temp.inputs[0].default_value = ctc
+            links.new(layerweight.outputs[0], lightcontrast.inputs[2])
+            links.new(layerweight.outputs[1], lightcontrast.inputs[1])
+            links.new(light_normal.outputs[0], layerweight.inputs[1])
+            links.new(light_normal.outputs[1], layerweight.inputs[0])
+            links.new(gamma_node.outputs[0], lightcontrast.inputs[0])
+            links.new(lightcontrast.outputs[0], light_mix.inputs[1])
+            links.new(lightfalloff.outputs[1], light_mix.inputs[0])
+            links.new(lightpath.outputs[7], lightfalloff.inputs[0])
+            links.new(lightpath.outputs[9], lightfalloff.inputs[1])
+            links.new(light_uv.outputs[3], light_normal.inputs[0])
+            links.new(lightpath.outputs[8], gamma_node.inputs[1])
+            links.new(color_temp.outputs[0], light_mix.inputs[2])
+            links.new(lightfalloff.outputs[0], emit.inputs[1])
+            links.new(light_mix.outputs[0], emit.inputs[0])
+            for out in lightpath.outputs[:7]:
+                out.hide = True
+
+            if has_gobos:
+                light_data['Gobo'] = True
+                light_data.shadow_buffer_clip_start = 0.001
+                create_gobo(geometry, goboGeometry)
                 gobos_node = nodes.new('ShaderNodeTexImage')
-                lightpath = nodes.new('ShaderNodeLightPath')
-                light_normal = nodes.new('ShaderNodeNormal')
-                color_temp = nodes.new('ShaderNodeBlackbody')
-                light_uv = nodes.new('ShaderNodeNewGeometry')
                 rota_node = nodes.new('ShaderNodeVectorRotate')
-                layerweight = nodes.new('ShaderNodeLayerWeight')
-                lightfalloff = nodes.new('ShaderNodeLightFalloff')
-                lightcontrast = nodes.new('ShaderNodeBrightContrast')
                 gobos_node.label = gobos_node.name = 'Gobos'
                 rota_node.label = rota_node.name = 'Gobo Rotate'
-                light_uv.label = light_uv.name = 'Light Orientation'
-                color_temp.label = color_temp.name = 'Color Temperature'
-                lightcontrast.label = lightcontrast.name = 'Light Contrast'
-                light_mix.blend_type = 'SOFT_LIGHT'
                 gobos_node.extension = 'EXTEND'
                 rota_node.invert = True
-                emit.location = (100, 300)
-                light_mix.location = (-100, 360)
-                light_uv.location = (-1160, 360)
-                rota_node.location = (-800, 380)
-                lightpath.location = (-980, 200)
-                color_temp.location = (-300, 100)
-                gobos_node.location = (-600, 400)
-                layerweight.location = (-300, 380)
-                light_normal.location = (-980, 380)
-                lightfalloff.location = (-800, 220)
-                lightcontrast.location = (-300, 240)
-                color_temp.inputs[0].default_value = ctc
-                links.new(lightfalloff.outputs[0], lightcontrast.inputs[2])
-                links.new(gobos_node.outputs[0], lightcontrast.inputs[0])
-                links.new(light_normal.outputs[0], layerweight.inputs[1])
-                links.new(light_normal.outputs[1], layerweight.inputs[0])
-                links.new(lightcontrast.outputs[0], light_mix.inputs[1])
-                links.new(lightpath.outputs[9], lightcontrast.inputs[1])
-                links.new(lightpath.outputs[8], lightfalloff.inputs[0])
-                links.new(lightpath.outputs[7], lightfalloff.inputs[1])
-                links.new(light_uv.outputs[3], light_normal.inputs[0])
-                links.new(layerweight.outputs[1], light_mix.inputs[0])
-                links.new(rota_node.outputs[0], gobos_node.inputs[0])
-                links.new(color_temp.outputs[0], light_mix.inputs[2])
+                gobos_node.location = (-800, 400)
+                rota_node.location = (-1180, 220)
                 links.new(light_uv.outputs[5], rota_node.inputs[0])
-                links.new(layerweight.outputs[0], emit.inputs[1])
-                links.new(light_mix.outputs[0], emit.inputs[0])
-                for out in lightpath.outputs:
-                    if not out.is_linked:
-                        out.hide = True
+                links.new(rota_node.outputs[0], gobos_node.inputs[0])
+                links.new(gobos_node.outputs[0], gamma_node.inputs[0])
 
 
     def create_laser(geometry):
@@ -1119,11 +1144,12 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                 lock_constraint = obj.constraints.new('LOCKED_TRACK')
             if check_tilt or check_master:
                 lock_constraint.track_axis = 'TRACK_NEGATIVE_Z'
+                if check_tilt:
+                    lock_constraint.lock_axis = 'LOCK_X'
+                else:
+                    lock_constraint.lock_axis = 'LOCK_Y'
             else:
                 lock_constraint.track_axis = 'TRACK_NEGATIVE_Y'
-            if check_tilt:
-                lock_constraint.lock_axis = 'LOCK_X'
-            else:
                 lock_constraint.lock_axis = 'LOCK_Z'
             if center_object and center_parent:
                 lock_constraint.target = main_target
