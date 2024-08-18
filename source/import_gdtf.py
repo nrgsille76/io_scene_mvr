@@ -571,16 +571,11 @@ def load_2d(profile, name):
     obj = None
     if filename in profile._package.namelist():
         profile._package.extract(filename, folder_path)
-    else:
-        folder_path = os.path.join(get_folder_path(), "primitives")
-        filename = "thumbnail.svg"
-
-    bpy.ops.wm.gpencil_import_svg(filepath="", directory=folder_path, files=[{"name": filename}], scale=1)
-    if len(bpy.context.view_layer.objects.selected):
-        obj = bpy.context.view_layer.objects.selected[0]
+        bpy.ops.wm.gpencil_import_svg(filepath="", directory=folder_path, files=[{"name": filename}], scale=1)
     if obj is not None:
         obj.name = '2D Symbol'
-        obj.users_collection[0].objects.unlink(obj)
+        if len(obj.users_collection):
+            obj.users_collection[0].objects.unlink(obj)
         obj.rotation_euler[0] = math.radians(-90)
     return obj
 
