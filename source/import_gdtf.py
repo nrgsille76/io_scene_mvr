@@ -850,10 +850,11 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         ctc = float(geometry.color_temperature)
         beam_angle = math.radians(geometry.beam_angle)
         obj_child = objectDict.get(cleanup_name(geometry))
-        light_energy = (geometry.luminous_flux / math.sqrt(beam_angle)) * 0.1
+        light_energy = geometry.luminous_flux / pow(geometry.beam_angle, 2)
         childname = obj_child.get('Original Name', obj_child.name.split('.')[0])
         obj_child['Fixture ID'] = obj_child.data['Fixture ID'] = fixture_id
         obj_child.data.name = '%s_Beam' % name
+        light_power = light_energy * 100
         if len(obj_child.data.materials):
             beam_mtl = obj_child.data.materials[0]
             beam_mtl['Fixture ID'] = fixture_id
@@ -886,9 +887,11 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         if light_data is None or light_data.get('Fixture Name') != lightname:
             light_data = data_lights.new(beamname, 'SPOT')
             create_gdtf_props(light_data, name)
-            light_data.energy = light_energy
-            light_data.volume_factor = light_energy * 0.005
-            light_data.diffuse_factor = light_energy * 0.001
+            light_data.energy = light_power
+            light_data.volume_factor = light_energy * 0.5
+            light_data.diffuse_factor = light_energy * 0.1
+            light_data.specular_factor = light_energy * 0.05
+            light_data.transmission_factor = light_energy * 0.01
             light_data.use_custom_distance = True
             light_data.cutoff_distance = 23
             light_data.spot_blend = calculate_spot_blend(geometry)
@@ -904,9 +907,9 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         light_object.parent = obj_child
         create_gdtf_props(light_object, name)
         light_object['Geometry Class'] = geometry.__class__.__name__
-        create_power_property(obj_child, light_energy)
-        create_power_property(light_object, light_energy)
-        create_power_property(light_data, light_energy)
+        create_power_property(obj_child, light_power)
+        create_power_property(light_object, light_power)
+        create_power_property(light_data, light_power)
         create_ctc_property(obj_child, ctc, 'Temperature')
         create_ctc_property(light_object, ctc, 'Light CTC')
         create_ctc_property(light_data, ctc, 'Temperature')
