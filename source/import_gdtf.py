@@ -91,12 +91,12 @@ def create_dimmer_driver(item, target, power):
     dimmer_curve = item.driver_add(dimmer_val)
     dimmer_drive = dimmer_curve.driver
     dimmer_drive.type = 'SCRIPTED'
-    dimmer_drive.expression = "power * dim * 0.01" if item.type == 'SPOT' else "dim * 0.01"
     dimmer_var = dimmer_drive.variables.new()
     dimmer_var.name = "dim"
     dimmer_target = dimmer_var.targets[0]
     dimmer_target.id = target
     dimmer_target.data_path = '["Intensity"]'
+    dimmer_drive.expression = "power * dim * 0.01" if item.type == 'SPOT' else "dim * 0.01"
     if item.type == 'SPOT':
         energy_var = dimmer_drive.variables.new()
         energy_var.name = "power"
@@ -117,9 +117,9 @@ def create_color_driver(item, target, path):
     red_var = red_drive.variables.new()
     green_var = green_drive.variables.new()
     blue_var = blue_drive.variables.new()
-    red_var.name = "R"
-    green_var.name = "G"
-    blue_var.name = "B"
+    red_var.name = "red"
+    green_var.name = "green"
+    blue_var.name = "blue"
     red_target = red_var.targets[0]
     green_target = green_var.targets[0]
     blue_target = blue_var.targets[0]
@@ -127,6 +127,20 @@ def create_color_driver(item, target, path):
     red_target.data_path = f'["{path}"][0]'
     green_target.data_path = f'["{path}"][1]'
     blue_target.data_path = f'["{path}"][2]'
+
+
+def create_ctc_driver(item, target):
+    ctc_node = item.data.node_tree.nodes.get('Color Temperature')
+    ctc_curve = ctc_node.inputs[0].driver_add("default_value")
+    ctc_drive = ctc_curve.driver
+    ctc_drive.type = 'AVERAGE'
+    ctc_var = ctc_drive.variables.new()
+    ctc_var.name = "ctc"
+    ctc_target = ctc_var.targets[0]
+    ctc_target.id = target
+    ctc_target.use_fallback_value = True
+    ctc_target.fallback_value = item.get('Temperature')
+    ctc_target.data_path = '["Light CTC"]'
 
 
 def create_gobo_driver(node, target, item=None):
@@ -150,13 +164,13 @@ def create_gobo_driver(node, target, item=None):
         gobo_drive = gobo_curve.driver
         slot_drive = slot_curve.driver
         gobo_drive.type = slot_drive.type = 'SCRIPTED'
-        gobo_drive.expression = "gobo % 10"
-        slot_drive.expression = "gobo // 10"
         gobo_var = gobo_drive.variables.new()
         slot_var = slot_drive.variables.new()
         gobo_var.name = slot_var.name = "gobo"
         gobo_target = gobo_var.targets[0]
         slot_target = slot_var.targets[0]
+        gobo_drive.expression = "gobo % 10"
+        slot_drive.expression = "gobo // 10"
         gobo_target.id = slot_target.id = target
         gobo_target.data_path = slot_target.data_path = '["Gobo Select"]'
         item.location = (-860, 120)
@@ -184,8 +198,6 @@ def create_trackball_driver(item, target, prop):
         limit_drive = limit_curve.driver
         max_drive.type = 'AVERAGE'
         min_drive.type = limit_drive.type = 'SCRIPTED'
-        min_drive.expression = "track * angle"
-        limit_drive.expression = "1.0 if state else 0.0"
         max_var = max_drive.variables.new()
         min_var = min_drive.variables.new()
         angle_var = min_drive.variables.new()
@@ -204,7 +216,11 @@ def create_trackball_driver(item, target, prop):
         max_target.data_path = '["Range"][0]'
         angle_target.data_path = '["Range"][1]'
         limit_target.data_path = '["Trackball"]'
+        max_target.use_fallback_value = True
+        angle_target.use_fallback_value = True
         angle_target.fallback_value = max_angle
+        min_drive.expression = "track * angle"
+        limit_drive.expression = "1.0 if state else 0.0"
         axis_value = max_target.fallback_value = min_angle
     if lock:
         bool_curve = lock.driver_add("enabled")
@@ -213,13 +229,13 @@ def create_trackball_driver(item, target, prop):
         lock_drive = lock_curve.driver
         bool_drive.type = 'AVERAGE'
         lock_drive.type = 'SCRIPTED'
-        lock_drive.expression = "0.0 if state else 1.0"
         bool_var = bool_drive.variables.new()
         lock_var = lock_drive.variables.new()
         bool_var.name = "target"
         lock_var.name = "state"
         bool_target = bool_var.targets[0]
         lock_target = lock_var.targets[0]
+        lock_drive.expression = "0.0 if state else 1.0"
         bool_target.id = lock_target.id = target
         lock_target.data_path = '["Trackball"]'
         bool_target.data_path = '["Target"]'
@@ -227,22 +243,37 @@ def create_trackball_driver(item, target, prop):
 
 def create_zoom_driver(item, target):
     if item.id_type == 'LIGHT':
+        focus = item.node_tree.nodes.get('Focus Factor')
+        focus_factor = focus.outputs[0].default_value
         zoom_curve = item.driver_add("spot_size")
+        focus_curve = focus.outputs[0].driver_add("default_value")
         zoom_drive = zoom_curve.driver
+        focus_drive = focus_curve.driver
         zoom_drive.type = 'AVERAGE'
+        focus_drive.type = 'SCRIPTED'
         zoom_var = zoom_drive.variables.new()
+        focus_var = focus_drive.variables.new()
+        power_var = focus_drive.variables.new()
         zoom_var.name = "focus_zoom"
+        focus_var.name = "angle"
+        power_var.name = "power"
         zoom_target = zoom_var.targets[0]
-        zoom_target.id = target
-        zoom_target.data_path = '["Focus Zoom"]'
+        focus_target = focus_var.targets[0]
+        power_target = power_var.targets[0]
+        power_target.id_type = 'LIGHT'
+        power_target.id = item
+        power_target.use_fallback_value = True
+        zoom_target.id = focus_target.id = target
+        power_target.fallback_value = focus_factor
+        focus_drive.expression = "power / pow(degrees(angle), 2)"
+        zoom_target.data_path = focus_target.data_path = '["Focus Zoom"]'
+        power_target.data_path = '["Power"]'
     elif item.id_type == 'OBJECT':
         x_curve = item.driver_add("scale", 0)
         y_curve = item.driver_add("scale", 1)
         x_drive = x_curve.driver
         y_drive = y_curve.driver
         x_drive.type = y_drive.type = 'SCRIPTED'
-        x_drive.expression = "zoom / max(angle, 1e-09)"
-        y_drive.expression = "zoom / max(angle, 1e-09)"
         zoom_x = x_drive.variables.new()
         zoom_y = y_drive.variables.new()
         angle_x = x_drive.variables.new()
@@ -255,6 +286,8 @@ def create_zoom_driver(item, target):
         angle_y_target = angle_y.targets[0]
         zoom_x_target.id = zoom_y_target.id = target
         angle_x_target.id = angle_y_target.id = item
+        x_drive.expression = "zoom / max(angle, 1e-09)"
+        y_drive.expression = "zoom / max(angle, 1e-09)"
         zoom_x_target.data_path = zoom_y_target.data_path = '["Focus Zoom"]'
         angle_x_target.data_path = angle_y_target.data_path = '["Focus"]'
 
@@ -277,13 +310,13 @@ def create_color_property(item, color, prop):
 
 def create_ctc_property(item, ctc, prop):
     if ctc:
-        tmin = 1000.0
-        tmax = 10000.0
+        tmin = 100.0
+        tmax = 100000.0
         item[prop] = ctc
         item.id_properties_ensure()
         ctc_property = item.id_properties_ui(prop)
         ctc_property.update(default=ctc, min=tmin, max=tmax, soft_min=tmin, soft_max=tmax, precision=0, step=100.0, subtype='TEMPERATURE')
-        
+
 
 def create_dimmer_property(item):
     item['Intensity'] = 100
@@ -296,7 +329,7 @@ def create_power_property(item, energy):
     item['Power'] = energy
     item.id_properties_ensure()
     dimmer_property = item.id_properties_ui('Power')
-    dimmer_property.update(default=1000.0, min=0.0, max=100000.0, soft_min=0.0, precision=0, step=1.0, soft_max=100000.0, subtype='POWER')
+    dimmer_property.update(default=energy, min=0.0, max=100000.0, soft_min=0.0, precision=0, step=1.0, soft_max=100000.0, subtype='POWER')
 
 
 def create_range_property(item, angle, prop, limits=False):
@@ -310,8 +343,8 @@ def create_range_property(item, angle, prop, limits=False):
             rmax = math.radians(max(angle))
             val = rmin, rmax
         else:
-            rmin = abs(angle) / 2
-            rmax = abs(angle) * 2
+            rmin = 1.0
+            rmax = 160.0
         item[prop] = val
         item.id_properties_ensure()
         range_property = item.id_properties_ui(prop)
@@ -588,6 +621,8 @@ def load_2d(profile, name):
     if filename in profile._package.namelist():
         profile._package.extract(filename, folder_path)
         bpy.ops.wm.gpencil_import_svg(filepath="", directory=folder_path, files=[{"name": filename}], scale=1)
+    if len(bpy.context.view_layer.objects.selected):
+        obj = bpy.context.view_layer.objects.selected[0]
     if obj is not None:
         obj.name = '2D Symbol'
         if len(obj.users_collection):
@@ -911,7 +946,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         create_power_property(light_object, light_power)
         create_power_property(light_data, light_power)
         create_ctc_property(obj_child, ctc, 'Temperature')
-        create_ctc_property(light_object, ctc, 'Light CTC')
+        create_ctc_property(light_object, ctc, 'Temperature')
         create_ctc_property(light_data, ctc, 'Temperature')
         light_object['Radius'] = light_data['Radius'] = obj_child['Radius'] = geometry.beam_radius
         if zoom_range:
@@ -936,38 +971,42 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
             emit.label = emit.name = 'Fixture'
             light_mix = nodes.new('ShaderNodeMixRGB')
             gamma_node = nodes.new('ShaderNodeGamma')
+            factor_node = nodes.new('ShaderNodeValue')
             lightpath = nodes.new('ShaderNodeLightPath')
             light_normal = nodes.new('ShaderNodeNormal')
             color_temp = nodes.new('ShaderNodeBlackbody')
             light_uv = nodes.new('ShaderNodeNewGeometry')
-            
             layerweight = nodes.new('ShaderNodeLayerWeight')
             lightfalloff = nodes.new('ShaderNodeLightFalloff')
             lightcontrast = nodes.new('ShaderNodeBrightContrast')
             light_uv.label = light_uv.name = 'Light Orientation'
+            factor_node.label = factor_node.name = 'Focus Factor'
             color_temp.label = color_temp.name = 'Color Temperature'
             lightcontrast.label = lightcontrast.name = 'Light Contrast'
+            focus_factor = light_energy / pow(max(geometry.beam_angle, 1),2)
             light_mix.blend_type = 'SOFT_LIGHT'
             emit.location = (100, 300)
+            light_uv.location = (-1080, 300)
             light_mix.location = (-100, 360)
-            light_uv.location = (-1360, 300)
-            lightpath.location = (-980, 240)
+            lightpath.location = (-700, 270)
+            factor_node.location = (-700, 90)
             gamma_node.location = (-500, 360)
             color_temp.location = (-300, 200)
-            layerweight.location = (-980, 400)
+            layerweight.location = (-700, 400)
             lightfalloff.location = (-500, 240)
+            light_normal.location = (-900, 400)
             lightcontrast.location = (-300, 360)
-            light_normal.location = (-1180, 400)
             color_temp.inputs[0].default_value = ctc
+            factor_node.outputs[0].default_value = focus_factor
             links.new(layerweight.outputs[0], lightcontrast.inputs[2])
             links.new(layerweight.outputs[1], lightcontrast.inputs[1])
             links.new(light_normal.outputs[0], layerweight.inputs[1])
             links.new(light_normal.outputs[1], layerweight.inputs[0])
             links.new(gamma_node.outputs[0], lightcontrast.inputs[0])
+            links.new(factor_node.outputs[0], lightfalloff.inputs[0])
             links.new(lightcontrast.outputs[0], light_mix.inputs[1])
             links.new(lightfalloff.outputs[1], light_mix.inputs[0])
-            links.new(lightpath.outputs[7], lightfalloff.inputs[0])
-            links.new(lightpath.outputs[9], lightfalloff.inputs[1])
+            links.new(lightpath.outputs[7], lightfalloff.inputs[1])
             links.new(light_uv.outputs[3], light_normal.inputs[0])
             links.new(lightpath.outputs[8], gamma_node.inputs[1])
             links.new(color_temp.outputs[0], light_mix.inputs[2])
@@ -986,11 +1025,23 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                 rota_node.label = rota_node.name = 'Gobo Rotate'
                 gobos_node.extension = 'EXTEND'
                 rota_node.invert = True
+                lightpath.location = (-980, 270)
+                light_uv.location = (-1360, 300)
+                factor_node.location = (-980, 90)
                 gobos_node.location = (-800, 400)
                 rota_node.location = (-1180, 220)
+                layerweight.location = (-980, 400)
+                light_normal.location = (-1180, 400)
                 links.new(light_uv.outputs[5], rota_node.inputs[0])
                 links.new(rota_node.outputs[0], gobos_node.inputs[0])
                 links.new(gobos_node.outputs[0], gamma_node.inputs[0])
+            else:
+                gradient_node = nodes.new('ShaderNodeTexGradient')
+                gradient_node.label = gradient_node.name = 'Gradient'
+                gradient_node.gradient_type = 'RADIAL'
+                gradient_node.location = (-900, 220)
+                links.new(light_uv.outputs[5], gradient_node.inputs[0])
+                links.new(gradient_node.outputs[0], gamma_node.inputs[0])
 
 
     def create_laser(geometry):
@@ -1258,10 +1309,10 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
     layer_collect = viewlayer.layer_collection
     gdtf_profile = pygdtf.FixtureType(filename)
     fixture_name = create_fixture_name(name)
-    has_gobos = is_mover = zoom_range = False
-    gobo_material = random_gobo = None
     uid = gdtf_profile.fixture_type_id
+    gobo_material = random_gobo = None
     mode = FixtureMode(gdtf_profile)
+    has_gobos = zoom_range = False
     channels = []
 
     if fixture:
@@ -1330,7 +1381,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
 
     if model_collection:
         root_object = None
-        zoom_angle = color_ctc = multi_mover = False
+        zoom_angle = False
         collection_name = model_collection.get('Fixture Name')
         if collect is None:
             if model_collection.name not in layer_collect.collection.children:
@@ -1340,7 +1391,6 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
         for obj in model_collection.objects:
             linkDict[obj.name] = obj
             viewlayer.objects.active = obj
-            multi_mover = obj.get('Sub Axis', False)
             if TARGETS and len(obj.constraints):
                 target = obj.get('Target ID')
                 locked = obj.constraints.get('Locked Track')
@@ -1352,20 +1402,12 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                     if target:
                         locked.target = targetData.get(target)
             if obj.type == 'LIGHT':
-                light_object = obj
                 obj.hide_select = True
-                obj.matrix_world = obj.matrix_world @ obj.parent.matrix_local.inverted()
                 zoom_angle = obj.get('Focus')
-                color_ctc = obj.get('Temperature')
-                create_range_property(obj, zoom_angle, 'Focus')
-                create_range_property(obj.data, zoom_angle, 'Focus', zoom_range)
-                create_ctc_property(obj, color_ctc, 'Temperature')
-                create_ctc_property(obj.data, color_ctc, 'Color Temperature')
+                obj.matrix_world = obj.matrix_world @ obj.parent.matrix_local.inverted()
                 obj['UUID'] = uid
             if obj.get('Use Root'):
                 root_object = obj
-                if zoom_range and zoom_angle:
-                    create_range_property(obj, zoom_angle, 'Focus Zoom', zoom_range)
                 if has_gobos and random_gobo is not None:
                     obj['Gobo Select'] = random_gobo
                     create_gobo_property(obj, float(len(gobos)))
@@ -1375,8 +1417,6 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 target_property = obj.id_properties_ui('Target')
                 target_property.update(default=TARGETS)
                 create_color_property(obj, gelcolor, 'RGB Beam')
-                if color_ctc:
-                    create_ctc_property(obj, color_ctc, 'Light CTC')
                 ob_name = fixture_name if fixture is None else name
                 obj.matrix_world = position @ obj.matrix_world.copy()
                 obj.name = index_name(ob_name)
@@ -1457,10 +1497,17 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                     linkDict[child.name].parent = obj
                 child.name = index_name(child.name)
             if obj.type == 'LIGHT':
-                beam_angle = obj.get('Focus')
+                zoom_angle = obj.get('Focus')
+                light_ctc = obj.get('Temperature')
                 create_dimmer_driver(obj.data, root_object, obj)
                 create_color_driver(obj.data, root_object, 'RGB Beam')
-                if zoom_range and beam_angle:
+                if light_ctc:
+                    create_ctc_property(root_object, light_ctc, 'Light CTC')
+                    create_ctc_driver(obj, root_object)
+                if zoom_range and zoom_angle:
+                    create_range_property(obj, zoom_angle, 'Focus')
+                    create_range_property(obj.data, zoom_angle, 'Focus', zoom_range)
+                    create_range_property(root_object, zoom_angle, 'Focus Zoom', zoom_range)
                     create_zoom_driver(obj.data, root_object)
                 if len(gobos) and start_gobo is not None:
                     obj.location[2] += 0.01
@@ -1487,7 +1534,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                     seq_target = seq_var.targets[0]
                     seq_target.id = root_object
                     seq_target.data_path = '["Gobo Select"]'
-                    if color_ctc:
+                    if light_ctc:
                         ctc_node = nodes.get('Color Temperature')
                         ctc_curve = ctc_node.inputs[0].driver_add("default_value")
                         ctc_drive = ctc_curve.driver
@@ -1582,10 +1629,6 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                         mtl_name = split_name.split('_')[-1]
                         mtl.name = '%s_%s' % (obj_name, mtl_name)
             if obj.get('Use Root'):
-                if is_mover and obj.get('Movement') is None:
-                    create_trackball_property(obj, 'Movement', TARGETS)
-                if multi_mover and obj.get('Position') is None:
-                    create_trackball_property(obj, 'Position', TARGETS)
                 for parents in obj.children_recursive:
                     if len(parents.children) > 1:
                         for idx, childs in enumerate(parents.children, 1):
@@ -1598,23 +1641,23 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                                     child_name = child.name.split('.')[0]
                                     child.name = '%s %d' % (child_name, idx)
             if obj.get('Geometry Type') == 'Axis':
+                mobile_axis = obj.get('Mobile Axis')
                 check_sub_axis = obj.get('Sub Axis')
-                check_root = root_object.get('Movement')
-                if check_root is None:
-                    create_trackball_property(root_object, 'Movement', TARGETS)
-                if check_sub_axis is None:
-                    create_trackball_driver(obj, root_object, 'Movement')
-                else:
-                    check_root = root_object.get('Position')
-                    if check_root is None:
+                if mobile_axis in {'Pan', 'Tilt'}:
+                    if check_sub_axis:
                         create_trackball_property(root_object, 'Position', TARGETS)
-                    create_trackball_driver(obj, root_object, 'Position') 
+                        create_trackball_driver(obj, root_object, 'Position')
+                    else:
+                        create_trackball_property(root_object, 'Movement', TARGETS)
+                        create_trackball_driver(obj, root_object, 'Movement')
                 obj.hide_select = True
                 obj['UUID'] = uid
 
         for obj in layer_collect.collection.all_objects:
             if obj.get('UUID') == uid or (obj.get('Geometry Type') == 'Target' and obj.get('Fixture Name') == collection_name):
                 obj.select_set(False) if obj.hide_select else obj.select_set(True)
+
+    linkDict.clear()
 
 
 def load_gdtf(context, filename, mscale, name, position, focus_point, fixture_id,
