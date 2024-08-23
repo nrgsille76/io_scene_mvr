@@ -766,7 +766,9 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         geometry_name = cleanup_name(geometry)
         geometry_class = geometry.__class__.__name__
         geometry_type = get_geometry_type_as_string(geometry)
-
+        if geometry_class == 'GeometryBeam':
+            if any(geometry.beam_type.value == x for x in ['None', 'Glow']):
+                geometry_type = 'Glow'
         for ob in data_objects:
             ob.select_set(False)
         if isinstance(geometry, pygdtf.GeometryReference):
@@ -825,11 +827,6 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         if obj is not None:
             if obj.data:
                 obj_name = obj.name.split('.')[0]
-                if geometry_class == 'GeometryBeam':
-                    if any(geometry.beam_type.value == x for x in ['None', 'Glow']):
-                        geometry_type = 'Glow'
-                    elif obj.data.materials:
-                        obj.data.materials[0]['Fixture ID'] = fixture_id
                 if obj.get('UUID') is None:
                     obj.data['Geometry Class'] = geometry_class
                     obj.data['Geometry Type'] = geometry_type
@@ -839,6 +836,8 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                 if obj.data.materials:
                     for mtl in obj.data.materials:
                         mtl_name = mtl.name.split('.')[0]
+                        if geometry_class == "GeometryBeam":
+                            mtl['Fixture ID'] = fixture_id
                         if obj.get('UUID') is None:
                             create_gdtf_props(mtl, name)
                             mtl['Original Name'] = mtl_name
@@ -1831,7 +1830,6 @@ def load(operator, context, files=None, directory="", filepath="", fixture_index
     active = context.view_layer.layer_collection.children.get(default_layer.name)
     if active is not None:
         context.view_layer.active_layer_collection = active
-
     context.window.cursor_set('DEFAULT')
 
     return {'FINISHED'}
