@@ -178,7 +178,7 @@ def create_gobo_driver(item, node, target, count):
     node.inputs[1].hide = True
     node.invert = True
     img_user = item.image_user
-    img_user.frame_duration = count
+    img_user.frame_duration = count - 1
     img_user.use_auto_refresh = True
     rota_curve = node.inputs[3].driver_add("default_value")
     seq_curve = img_user.driver_add("frame_offset")
@@ -348,7 +348,8 @@ def create_zoom_driver(item, target):
         angle_x_target.data_path = angle_y_target.data_path = '["Focus"]'
 
 
-def create_gobo_property(item, count, prop):
+def create_gobo_property(item, amount, prop):
+    count = amount - 1
     rota_var = "%s Rotate" % prop
     item[rota_var] = 0.0
     item.id_properties_ensure()
@@ -983,11 +984,16 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         create_ctc_property(light_object, ctc, 'Temperature')
         create_ctc_property(light_data, ctc, 'Temperature')
         if zoom_range:
-            create_range_property(obj_child, zoom_range, 'Range')
+            create_range_property(obj_child, beam_angle, 'Focus', zoom_range)
             create_range_property(light_object, beam_angle, 'Focus', zoom_range)
             create_range_property(light_data, beam_angle, 'Focus', zoom_range)
+            create_range_property(obj_child, zoom_range, 'Range')
             create_range_property(light_object, zoom_range, 'Range')
             create_range_property(light_data, zoom_range, 'Range')
+        else:
+            create_range_property(obj_child, beam_angle, 'Focus')
+            create_range_property(light_object, beam_angle, 'Focus')
+            create_range_property(light_data, beam_angle, 'Focus')
         obj_child.matrix_parent_inverse = light_object.matrix_world.inverted()
         create_transform_property(light_object)
         collection.objects.link(light_object)
@@ -1017,7 +1023,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
             factor_node.label = factor_node.name = 'Focus Factor'
             color_temp.label = color_temp.name = 'Color Temperature'
             lightcontrast.label = lightcontrast.name = 'Light Contrast'
-            focus_factor = light_energy / pow(max(geometry.beam_angle, 1),2)
+            focus_factor = light_power / max(pow(geometry.beam_angle, 2), 1e-09)
             light_mix.blend_type = 'MULTIPLY'
             emit.location = (100, 320)
             light_mix.location = (-100, 360)
@@ -1079,7 +1085,8 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         create_gdtf_props(obj, name)
         obj['Geometry Class'] = obj.data['Geometry Class'] = geometry_class     
         obj['Geometry Type'] = obj.data['Geometry Type'] = 'Gobo'
-        obj['Radius'] = obj.data['Radius'] = goboGeometry.beam_radius
+        create_radius_property(obj, goboGeometry.beam_radius)
+        create_radius_property(obj.data, goboGeometry.beam_radius)
         obj.dimensions = (goboGeometry.length, goboGeometry.width, 0)
         obj.name = obj.data.name = goboGeometry.name
         objectDict[cleanup_name(goboGeometry)] = obj
@@ -1089,7 +1096,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
     def calculate_spot_blend(geometry):
         """Return spot_blend value based on beam_type."""
         beam_type = geometry.beam_type.value
-        if any(beam_type == x for x in ['Wash', 'Fresnel', 'PC']):
+        if not has_gobos and any(beam_type == x for x in ['Wash', 'Fresnel', 'PC']):
             return 1.0
         return 0.0
 
@@ -1320,7 +1327,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
     object_data = bpy.data.objects
     data_collect = bpy.data.collections
     layer_collect = viewlayer.layer_collection
-    has_gobos = has_blend = zoom_range = False
+    has_gobos = has_focus = has_blend = zoom_range = False
     gdtf_profile = pygdtf.FixtureType(filename)
     fixture_name = create_fixture_name(name)
     uid = gdtf_profile.fixture_type_id
@@ -1376,6 +1383,8 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                     wheels.append(wheel_function)
         if 'Iris' in channel['ID'] or 'Frost' in channel['ID']:
             has_blend = True
+        if 'Focus' in channel['ID']:
+            has_focus = True
         if 'Pan' in channel['ID']:
             pan_functions = channel.get('Functions')
             pan_range = pan_functions[0].physical_from, pan_functions[0].physical_to
@@ -1393,17 +1402,19 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 wheel_function = str(function.wheel)
                 if wheel_function != 'None' and wheel_function not in wheels:
                     wheels.append(wheel_function)
-        if 'Iris' in channel['ID'] or 'Frost' in channel['ID']:
+        if 'Iris' in virtual['id'] or 'Frost' in virtual['id']:
             has_blend = True
-        if 'Pan' in channel['id']:
+        if 'Focus' in virtual['id']:
+            has_focus = True
+        if 'Pan' in virtual['id']:
             pan_functions = virtual.get('functions')
             pan_range = pan_functions[0].physical_from, pan_functions[0].physical_to
-        if 'Tilt' in channel['id']:
+        if 'Tilt' in virtual['id']:
             tilt_functions = virtual.get('functions')
             tilt_range = tilt_functions[0].physical_from, tilt_functions[0].physical_to
         if 'Zoom' in virtual['id']:
-            zoom_functions = channel.get('functions')
-            zoom_range = zoom_functiosn[0].physical_from, zoom_functions[0].physical_to
+            zoom_functions = virtual.get('functions')
+            zoom_range = zoom_functions[0].physical_from, zoom_functions[0].physical_to
 
     linkDict = {}
     start_gobo = None
@@ -1453,8 +1464,9 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 create_dimmer_property(obj)
                 if has_blend:
                     create_factor_property(obj, 'Focus Edge')
-                if has_gobos:
+                if has_focus:
                     create_factor_property(obj, 'Focus Factor', 0.5)
+                if has_gobos:
                     obj['%s Select' % wheel_name] = random_gobo
                     create_gobo_property(obj, gobo_count, wheel_name)
                 obj['Target'] = TARGETS
@@ -1552,6 +1564,8 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 light_uv = nodes.get('Light Orientation')
                 if has_blend:
                     create_factor_driver(obj, root_object)
+                if has_focus:
+                    create_focus_driver(obj, root_object)
                 if root_object and light_temperature:
                     create_ctc_property(root_object, light_temperature, 'Light CTC')
                     create_ctc_driver(obj, root_object)
@@ -1563,7 +1577,6 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                         create_range_property(root_object, zoom_angle, 'Focus Zoom', zoom_range)
                     create_zoom_driver(obj.data, root_object)
                 if has_gobos and start_gobo is not None:
-                    create_focus_driver(obj, root_object)
                     obj.data.shadow_buffer_clip_start = 0.001
                     obj.location[2] += 0.01
                     emit_node = nodes.get('Fixture')
@@ -1830,6 +1843,7 @@ def load(operator, context, files=None, directory="", filepath="", fixture_index
     active = context.view_layer.layer_collection.children.get(default_layer.name)
     if active is not None:
         context.view_layer.active_layer_collection = active
+
     context.window.cursor_set('DEFAULT')
 
     return {'FINISHED'}
