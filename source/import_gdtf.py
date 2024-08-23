@@ -1023,7 +1023,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
             factor_node.label = factor_node.name = 'Focus Factor'
             color_temp.label = color_temp.name = 'Color Temperature'
             lightcontrast.label = lightcontrast.name = 'Light Contrast'
-            focus_factor = light_power / max(pow(geometry.beam_angle, 2), 1e-09)
+            focus_factor = light_power / max(pow(geometry.beam_angle, 2), 1e-09) * 0.1
             light_mix.blend_type = 'MULTIPLY'
             emit.location = (100, 320)
             light_mix.location = (-100, 360)
