@@ -261,8 +261,18 @@ def create_trackball_driver(item, target, prop):
         bool_target.data_path = '["Target"]'
 
 
-def create_zoom_driver(item, target):
+def create_zoom_driver(item, target, prop):
     if item.id_type == 'LIGHT':
+        if prop == 'Focus Zoom':
+            zoom_curve = item.driver_add("spot_size")
+            zoom_drive = zoom_curve.driver
+            zoom_drive.type = 'AVERAGE'
+            zoom_var = zoom_drive.variables.new()
+            zoom_var.name = "zoom"
+            zoom_target = zoom_var.targets[0]
+            zoom_target.id = target
+            zoom_target.data_path = f'["{prop}"]'
+        reference = item if prop == 'Focus' else target
         focus = item.node_tree.nodes.get('Focus Factor')
         focus_factor = focus.outputs[0].default_value
         diffuse_factor = item.diffuse_factor
@@ -271,14 +281,11 @@ def create_zoom_driver(item, target):
         diffuse_curve = item.driver_add("diffuse_factor")
         volume_curve = item.driver_add("volume_factor")
         spec_curve = item.driver_add("specular_factor")
-        zoom_curve = item.driver_add("spot_size")
         focus_curve = focus.outputs[0].driver_add("default_value")
         diffuse_drive = diffuse_curve.driver
         volume_drive = volume_curve.driver
         spec_drive = spec_curve.driver
-        zoom_drive = zoom_curve.driver
         focus_drive = focus_curve.driver
-        zoom_drive.type = 'AVERAGE'
         diffuse_drive.type = spec_drive.type = 'SCRIPTED'
         volume_drive.type = focus_drive.type = 'SCRIPTED'
         diffuse_ang = diffuse_drive.variables.new()
@@ -289,29 +296,24 @@ def create_zoom_driver(item, target):
         power_var = focus_drive.variables.new()
         spec_ang = spec_drive.variables.new()
         spec_fac = spec_drive.variables.new()
-        zoom_var = zoom_drive.variables.new()
-        zoom_var.name = "zoom"
         focus_var.name = spec_ang.name = "angle"
         power_var.name = spec_fac.name = "factor"
         diffuse_ang.name = volume_ang.name = "angle"
         diffuse_fac.name = volume_fac.name = "factor"
         spec_angle = spec_ang.targets[0]
         spec_factor = spec_fac.targets[0]
-        zoom_target = zoom_var.targets[0]
         vol_angle = volume_ang.targets[0]
         dif_angle = diffuse_ang.targets[0]
         vol_factor = volume_fac.targets[0]
         dif_factor = diffuse_fac.targets[0]
         focus_target = focus_var.targets[0]
         power_target = power_var.targets[0]
-        dif_angle.id_type = vol_angle.id_type = 'OBJECT'
-        dif_factor.id_type = vol_factor.id_type = 'LIGHT'
-        power_target.id_type = spec_factor.id_type = 'LIGHT'
+        power_target.id_type = spec_factor.id_type = dif_factor.id_type = vol_factor.id_type = 'LIGHT'
+        focus_target.id_type = spec_angle.id_type = dif_angle.id_type = vol_angle.id_type = 'LIGHT' if prop == 'Focus' else 'OBJECT'
         power_target.id = dif_factor.id = vol_factor.id = spec_factor.id = item
         power_target.use_fallback_value = spec_factor.use_fallback_value = True
         dif_factor.use_fallback_value = vol_factor.use_fallback_value = True
-        zoom_target.id = focus_target.id = spec_angle.id = target
-        dif_angle.id = vol_angle.id = target
+        focus_target.id = spec_angle.id = dif_angle.id = vol_angle.id = reference
         dif_factor.fallback_value = diffuse_factor
         vol_factor.fallback_value = volume_factor
         power_target.fallback_value = focus_factor
@@ -322,9 +324,9 @@ def create_zoom_driver(item, target):
         focus_drive.expression = "factor / max(pow(degrees(angle), 2), 1e-09)"
         dif_factor.data_path = vol_factor.data_path = '["Power"]'
         power_target.data_path = spec_factor.data_path = '["Power"]'
-        zoom_target.data_path = focus_target.data_path = '["Focus Zoom"]'
-        dif_angle.data_path = vol_angle.data_path = spec_angle.data_path = '["Focus Zoom"]'
-    elif item.id_type == 'OBJECT':
+        dif_angle.data_path = vol_angle.data_path = f'["{prop}"]'
+        focus_target.data_path = spec_angle.data_path = f'["{prop}"]'
+    elif item.id_type == 'OBJECT' and prop == 'Focus Zoom':
         x_curve = item.driver_add("scale", 0)
         y_curve = item.driver_add("scale", 1)
         x_drive = x_curve.driver
@@ -344,7 +346,7 @@ def create_zoom_driver(item, target):
         angle_x_target.id = angle_y_target.id = item
         x_drive.expression = "zoom / max(angle, 1e-09)"
         y_drive.expression = "zoom / max(angle, 1e-09)"
-        zoom_x_target.data_path = zoom_y_target.data_path = '["Focus Zoom"]'
+        zoom_x_target.data_path = zoom_y_target.data_path = f'["{prop}"]'
         angle_x_target.data_path = angle_y_target.data_path = '["Focus"]'
 
 
@@ -1570,12 +1572,12 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                     create_ctc_property(root_object, light_temperature, 'Light CTC')
                     create_ctc_driver(obj, root_object)
                 if zoom_range and zoom_angle:
-                    create_range_property(obj, zoom_angle, 'Focus')
                     check_zoom = root_object.get('Focus Zoom', False)
-                    create_range_property(obj.data, zoom_angle, 'Focus', zoom_range)
                     if not check_zoom:
                         create_range_property(root_object, zoom_angle, 'Focus Zoom', zoom_range)
-                    create_zoom_driver(obj.data, root_object)
+                    create_zoom_driver(obj.data, root_object, 'Focus Zoom')
+                elif zoom_angle:
+                    create_zoom_driver(obj.data, root_object, 'Focus')
                 if has_gobos and start_gobo is not None:
                     obj.data.shadow_buffer_clip_start = 0.001
                     obj.location[2] += 0.01
@@ -1671,7 +1673,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                         if not check_zoom:
                             create_range_property(root_object, zoom_angle, 'Focus Zoom', zoom_range)
                         create_range_property(obj, zoom_angle, 'Focus', zoom_range)
-                        create_zoom_driver(obj, root_object)
+                        create_zoom_driver(obj, root_object, 'Focus Zoom')
                     if not gobo_material.use_nodes:
                         gobo_material.use_nodes = True
                         gobo_nodes = gobo_material.node_tree.nodes
