@@ -599,8 +599,8 @@ def create_iris_nodes(item, root, inputnode, outputnode):
     center_node = iris_nodes.new('ShaderNodeVectorMath')
     cord_output = outputnode.outputs[5] if check_spot else outputnode.outputs[2]
     center_node.inputs[1].default_value[:2] = add_node.inputs[1].default_value[:2] = [0.5] * 2
-    center_node.location = (-1380, 200) if check_spot else (-1020, 100)
-    scale_node.location = (-1180, 200) if check_spot else (-820, 120)
+    center_node.location = (-1380, 180) if check_spot else (-980, 120)
+    scale_node.location = (-1180, 150) if check_spot else (-820, 150)
     iris_node.location = (-500, 150) if check_spot else (-100, 170)
     add_node.location = (-980, 150) if check_spot else (-620, 150)
     inputnode.location = (-320, 340) if check_spot else (100, 340)
@@ -1091,7 +1091,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
             light_mix.location = (-100, 360)
             gamma_node.location = (-500, 340)
             color_temp.location = (-300, 220)
-            factor_node.location = (-700, 160)
+            factor_node.location = (-700, 150)
             lightfalloff.location = (-500, 220)
             lightcontrast.location = (-300, 360)
             if has_gobos:
@@ -1103,7 +1103,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
             light_mix.inputs[2].default_value[:3] = [1.0] * 3
             factor_node.outputs[0].default_value = focus_factor
             light_uv.location = (-1580, 300) if has_gobos else(-1300, 300)
-            lightpath.location = (-1180, 300) if has_gobos else (-900, 300)
+            lightpath.location = (-1180, 320) if has_gobos else (-900, 320)
             layerweight.location = (-980, 440) if has_gobos else (-700, 440)
             fresnel_node.location = (-1180, 420) if has_gobos else (-900, 420)
             light_normal.location = (-1380, 400) if has_gobos else (-1100, 400)
@@ -1724,23 +1724,23 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 if has_iris:
                     iris_mix = nodes.new('ShaderNodeMixRGB')
                     create_iris_nodes(obj.data, root_object, iris_mix, light_uv)
-                    focus_node_pos = focus_node.location.x + 200
-                    lightfalloff_pos = lightfalloff.location.x + 200
-                    gamma_node_pos = gamma_node.location.x + 200
-                    color_temp_pos = color_temp.location.x + 200
-                    light_mix_pos = light_mix.location.x + 200
-                    emit_node_pos = emit_node.location.x + 200
-                    lightcontrast_pos = lightcontrast.location.x + 200
-                    light_output_pos = light_output.location.x + 200
-                    focus_node.location = (focus_node_pos, 140)
-                    lightfalloff.location = (lightfalloff_pos, 220)
-                    gamma_node.location = (gamma_node_pos, 340)
-                    color_temp.location = (color_temp_pos, 200)
-                    light_mix.location = (light_mix_pos, 340)
-                    emit_node.location = (emit_node_pos, 300)
+                    mix_pos = light_mix.location.x + 400 if check_wheels else 200
+                    emit_pos = emit_node.location.x + 400 if check_wheels else 200
+                    temp_pos = color_temp.location.x + 400 if check_wheels else 200
+                    gamma_pos = gamma_node.location.x + 400 if check_wheels else 200
+                    focus_pos = focus_node.location.x + 400 if check_wheels else 200
+                    output_pos = light_output.location.x + 400 if check_wheels else 200
+                    lightfall_pos = lightfalloff.location.x + 400 if check_wheels else 200
+                    lightcontrast_pos = lightcontrast.location.x + 400 if check_wheels else 200
+                    focus_node.location = (focus_pos, 150)
+                    light_mix.location = (mix_pos, 340)
+                    emit_node.location = (emit_pos, 300)
+                    color_temp.location = (temp_pos, 200)
+                    gamma_node.location = (gamma_pos, 340)
+                    light_output.location = (output_pos, 300)
+                    iris_mix.location = (gamma_pos - 200, 340)
+                    lightfalloff.location = (lightfall_pos, 220)
                     lightcontrast.location = (lightcontrast_pos, 360)
-                    light_output.location = (light_output_pos, 300)
-                    iris_mix.location = (gamma_node_pos - 200, 340)
                     links.new(pre_node.outputs[0], iris_mix.inputs[1])
                     links.new(light_path.outputs[7], iris_mix.inputs[0])
                     links.new(iris_mix.outputs[0], gamma_node.inputs[0])
@@ -1847,11 +1847,12 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                                 gobo_links.new(light_path.outputs[8], light_fall.inputs[1])
                             iris_mix = gobo_nodes.new('ShaderNodeMixRGB')
                             create_iris_nodes(gobo_material, root_object, iris_mix, gobo_cord)
-                            opacity_node_pos = opacity_node.location.x + 200
-                            material_node_pos = material_node.location.x + 200
-                            opacity_node.location = (opacity_node_pos, 320)
-                            material_node.location = (material_node_pos, 300)
-                            iris_mix.location = (opacity_node_pos - 200, 340)
+                            if check_wheels:
+                                opacity_pos = opacity_node.location.x + 200
+                                material_pos = material_node.location.x + 200
+                                opacity_node.location = (opacity_pos, 320)
+                                material_node.location = (material_pos, 300)
+                            iris_mix.location = (opacity_node.location.x - 200, 340)
                             gobo_links.new(previous_node.outputs[0], iris_mix.inputs[1])
                             gobo_links.new(iris_mix.outputs[0], opacity_node.inputs[0])
                             gobo_links.new(light_fall.outputs[0], iris_mix.inputs[0])
