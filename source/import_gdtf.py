@@ -661,7 +661,10 @@ def extract_gobos(profile, fid, fixturename, wheels):
                     media_name = f"{name}_{wheel.name}-{idx:04}.{extend}"
                     img_path = Path(os.path.join(images_path, str(media_file)))
                     destination = Path(wheel_path, media_name)
-                    destination.write_bytes(img_path.read_bytes())
+                    if os.path.isfile(img_path):
+                        destination.write_bytes(img_path.read_bytes())
+                    else:
+                        destination.write_bytes(open_image.read_bytes()) 
                     gobo_source = destination.resolve()
                 if idx == 1:
                     first_gobo = str(gobo_source)
@@ -1451,7 +1454,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
         uid = fixture.uuid
         mode = fixture.gdtf_mode
         color = convert_color(gelcolor)
-        gelcolor = list(int((255/1)*i) for i in color[:3])
+        gelcolor = list((255/1) * i for i in color[:3])
 
     def index_name(device):
         device_name = device
@@ -1943,6 +1946,7 @@ def load_prepare(context, filename, global_matrix, collect, align_objects, align
 
     name = Path(filename).stem
     mscale = mathutils.Matrix.Scale(scale_objects, 4)
+
     if global_matrix is not None:
         mscale = global_matrix @ mscale
 
