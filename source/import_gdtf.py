@@ -539,7 +539,7 @@ def convert_color(color_cie):
         var_B = 1.055 * math.pow(var_B, 1 / 2.4) - 0.055
     else:
         var_B = 12.92 * var_B
-    return (int(var_R * 100), int(var_G * 100), int(var_B * 100), 0)
+    return (var_R, var_G, var_B, 0)
 
 
 def load_blender_primitive(model):
@@ -747,6 +747,7 @@ def load_model(profile, name, model):
     if model.file.extension.lower() == '3ds':
         inside_zip_path = f"models/3ds/{model.file.name}.{model.file.extension}"
         file_name = os.path.join(folder_path, inside_zip_path)
+        print('filename', file_name)
         try:
             profile._package.extract(inside_zip_path, folder_path)
             load_3ds(file_name, bpy.context, FILTER={'MESH'}, KEYFRAME=False, APPLY_MATRIX=False)
@@ -760,6 +761,7 @@ def load_model(profile, name, model):
         inside_zip_path = f"models/gltf/{model.file.name}.{model.file.extension}"
         profile._package.extract(inside_zip_path, folder_path)
         file_name = os.path.join(folder_path, inside_zip_path)
+        print('filename', file_name)
         bpy.ops.import_scene.gltf(filepath=file_name)
         for ob in bpy.context.selected_objects:
             ob.data['Model Type'] = model.file.extension.lower()
@@ -1451,10 +1453,11 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
     wheels = []
 
     if fixture:
-        uid = fixture.uuid
         mode = fixture.gdtf_mode
         color = convert_color(gelcolor)
-        gelcolor = list(i * 0.01 for i in color[:3])
+        gelcolor = list(i for i in color[:3])
+        fixture_name = create_fixture_name(fixture.gdtf_spec)
+
 
     def index_name(device):
         device_name = device
@@ -1476,8 +1479,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
     # Import Fixture Model Collection
     model_collection = get_fixture_models(gdtf_profile, fixture_name, fixture_id, uid, mode, BEAMS, TARGETS, CONES)
     if model_collection:
-        collection_name = fixture_name if fixture is None else name
-        model_collection.name = index_name(collection_name)
+        model_collection.name = index_name(fixture_name)
         if collect and model_collection.name not in collect.children:
             collect.children.link(model_collection)
 
@@ -1550,7 +1552,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
     random_glow = [random.uniform(0.0, 1.0) for _ in range(3)]
     if len(wheels):
         has_gobos = True
-        gobo_data = extract_gobos(gdtf_profile, fixture_id, name, wheels)
+        gobo_data = extract_gobos(gdtf_profile, fixture_id, fixture_name, wheels)
         wheel_count = len(gobo_data.keys())
         check_wheels = wheel_count > 1
         start_gobo = gobo_data.get(wheels[0])
