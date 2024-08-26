@@ -309,18 +309,19 @@ def create_zoom_driver(item, target, prop):
         focus_target = focus_var.targets[0]
         power_target = power_var.targets[0]
         power_target.id_type = spec_factor.id_type = dif_factor.id_type = vol_factor.id_type = 'LIGHT'
-        focus_target.id_type = spec_angle.id_type = dif_angle.id_type = vol_angle.id_type = 'LIGHT' if prop == 'Focus' else 'OBJECT'
+        focus_target.id_type = spec_angle.id_type = 'LIGHT' if prop == 'Focus' else 'OBJECT'
+        dif_angle.id_type = vol_angle.id_type = 'LIGHT' if prop == 'Focus' else 'OBJECT'
+        focus_target.id = spec_angle.id = dif_angle.id = vol_angle.id = reference
         power_target.id = dif_factor.id = vol_factor.id = spec_factor.id = item
         power_target.use_fallback_value = spec_factor.use_fallback_value = True
         dif_factor.use_fallback_value = vol_factor.use_fallback_value = True
-        focus_target.id = spec_angle.id = dif_angle.id = vol_angle.id = reference
         dif_factor.fallback_value = diffuse_factor
         vol_factor.fallback_value = volume_factor
         power_target.fallback_value = focus_factor
         spec_factor.fallback_value = specular_factor
         formula = "factor / max(pow(degrees(angle), 2), 1e-09)"
-        diffuse_drive.expression = f"{formula} * 0.1"
-        spec_drive.expression = f"{formula} * 0.02"
+        diffuse_drive.expression = f"{formula} * 0.5"
+        spec_drive.expression = f"{formula} * 0.04"
         volume_drive.expression = f"{formula}"
         focus_drive.expression = f"{formula}"
         dif_factor.data_path = vol_factor.data_path = '["Power"]'
@@ -488,27 +489,12 @@ def collect_dmx_channels(gdtf_profile, mode):
             offset_fine = channel.offset[1] + break_addition
         max_offset = max([offset_coarse, offset_fine])
         if len(break_channels) < max_offset:
-            break_channels = break_channels + [{
-                'DMX': '',
-                'ID': '',
-                'Geometry': '',
-                'Break': '',
-                }] * (max_offset - len(break_channels))
-        break_channels[offset_coarse - 1] = {
-            'DMX': offset_coarse,
-            'ID': feature,
-            'Geometry': geometry.name,
-            'Break': channel_break,
-            'Functions': channel.logical_channels[0].channel_functions,
-        }
+            break_channels = break_channels + [{'ID': '', 'Geometry': ''}] * (max_offset - len(break_channels))
+        break_channels[offset_coarse - 1] = {'ID': feature, 'Geometry': geometry.name,
+                                             'Functions': channel.logical_channels[0].channel_functions}
         if offset_fine > 0:
-            break_channels[offset_fine - 1] = {
-                'DMX': offset_fine,
-                'ID': '+' + feature,
-                'Geometry': geometry.name,
-                'Break': channel_break,
-                'Functions': channel.logical_channels[0].channel_functions,
-            }
+            break_channels[offset_fine - 1] = {'ID': '+' + feature, 'Geometry': geometry.name,
+                                               'Functions': channel.logical_channels[0].channel_functions}
         dmx_channels[channel_break - 1] = break_channels
         if feature in {'Pan', 'Tilt'}:
             channelData[geometry.name] = feature
@@ -794,6 +780,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
     """Create model collection."""
 
     objectDict = {}
+    color_channels = set()
     fixturetype_id = profile.fixture_type_id
     collection = bpy.data.collections.new(name)
     dmx_mode = pygdtf.utils.get_dmx_mode_by_name(profile, mode)
@@ -812,6 +799,10 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
     virtual_channels = pygdtf.utils.get_virtual_channels(profile, mode)
 
     for channel in logical_channels:
+        if 'Color' in channel['ID']:
+            color_attribute = channel.get('ID')
+            if color_attribute[-1] in {'R','G','B','C','M','Y'}:
+                color_channels.add(channel.get('Geometry'))
         if 'Gobo' in channel['ID']:
             has_gobos = True
         if 'Zoom' in channel['ID']:
@@ -823,21 +814,26 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         """Load 3d models, primitives and shapes"""
         data_meshes = bpy.data.meshes
         data_objects = bpy.data.objects
+        original_name = str(geometry.name)
         geometry_name = cleanup_name(geometry)
         geometry_class = geometry.__class__.__name__
         geometry_type = get_geometry_type_as_string(geometry)
+        if original_name in color_channels:
+            setattr(geometry, "reference_rgb", geometry_name)
         if geometry_class == 'GeometryBeam':
             if any(geometry.beam_type.value == x for x in ['None', 'Glow']):
                 geometry_type = 'Glow'
         for ob in data_objects:
             ob.select_set(False)
+
         if isinstance(geometry, pygdtf.GeometryReference):
             reference = pygdtf.utils.get_geometry_by_name(profile, geometry.geometry)
             geometry.model = reference.model
-
             if hasattr(reference, "geometries"):
                 for sub_geometry in reference.geometries:
-                    setattr(sub_geometry, "reference_root", str(geometry.name))
+                    setattr(sub_geometry, "reference_root", original_name)
+                    if original_name in color_channels:
+                        setattr(sub_geometry, "reference_rgb", original_name)
                     load_geometries(sub_geometry)
 
         if geometry.model is None:
@@ -864,7 +860,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
             if obj is None or obj.get('Model Name') != mesh_name or obj.get('Fixture ID') != fixture_id:
                 geo = data_meshes.get(mesh_name)
                 if geo and geo.get('Model Name') == mesh_name and geo.get('UUID') == fixturetype_id:
-                    obj = data_objects.new(cleanup_name(geometry), geo)
+                    obj = data_objects.new(geometry_name, geo)
                 else:
                     try:
                         obj = load_model(profile, name, model)
@@ -914,9 +910,10 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
             else:
                 obj['Geometry Class'] = geometry_class
                 obj['Geometry Type'] = geometry_type
-                obj['Model Name'] = mesh_name
-                obj['Original Name'] = geometry.name
+                obj['Original Name'] = original_name
                 obj.hide_select = True
+                if len(mesh_name):
+                    obj['Model Name'] = mesh_name
             if isinstance(geometry, pygdtf.GeometryReference):
                 obj['Reference'] = str(geometry.geometry)
                 obj['Geometry Type'] = obj.data.get('Geometry Type')
@@ -924,7 +921,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                 obj['Reference'] = getattr(geometry, "reference_root")
             if str(model.primitive_type) == 'Pigtail':
                 obj['Geometry Type'] = 'Pigtail'
-            objectDict[cleanup_name(geometry)] = obj
+            objectDict[geometry_name] = obj
             mb = obj.matrix_basis.copy()
             if obj.data.get('Model Type') == 'glb':
                 obj.data.transform(mb) 
@@ -937,6 +934,8 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                 if hasattr(geometry, "reference_root"):
                     root_reference = getattr(geometry, "reference_root")
                     setattr(sub_geometry, "reference_root", root_reference)
+                if original_name in color_channels:
+                    setattr(sub_geometry, "reference_rgb", original_name)
                 load_geometries(sub_geometry)
 
 
@@ -1035,6 +1034,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         create_gdtf_props(light_object, name)
         light_object['Geometry Class'] = geometry.__class__.__name__
         light_object['Lamp Type'] = light_data['Lamp Type'] = lamp_type
+        light_object['Original Name'] = geometry.name
         create_power_property(obj_child, light_power)
         create_power_property(light_object, light_power)
         create_power_property(light_data, light_power)
@@ -1044,6 +1044,8 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         create_ctc_property(obj_child, ctc, 'Temperature')
         create_ctc_property(light_object, ctc, 'Temperature')
         create_ctc_property(light_data, ctc, 'Temperature')
+        if obj_child.get('RGB') or childname in color_channels:
+            light_object['RGB'] = True
         if zoom_range:
             create_range_property(obj_child, beam_angle, 'Focus', zoom_range)
             create_range_property(light_object, beam_angle, 'Focus', zoom_range)
@@ -1180,10 +1182,14 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
     def constraint_child_to_parent(parent_geometry, child_geometry):
         if not cleanup_name(parent_geometry) in objectDict:
             return
-        obj_parent = objectDict[cleanup_name(parent_geometry)]
         if not cleanup_name(child_geometry) in objectDict:
             return
-        obj_child = objectDict[cleanup_name(child_geometry)]
+        obj_parent = objectDict.get(cleanup_name(parent_geometry))
+        obj_child = objectDict.get(cleanup_name(child_geometry))
+        if hasattr(parent_geometry, "reference_rgb"):
+            obj_parent['RGB'] = True
+        if hasattr(child_geometry, "reference_rgb"):
+            obj_child['RGB'] = True
         obj_child.parent = obj_parent
         obj_child.matrix_parent_inverse = obj_parent.matrix_world.inverted()
 
@@ -1214,6 +1220,9 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                 if len(reference.geometries) > 0:
                     for child_geometry in reference.geometries:
                         setattr(child_geometry, "reference_root", str(reference.name))
+                        if hasattr(geometry, "reference_rgb"):
+                            rgb_reference = getattr(geometry, "reference_rgb")
+                            setattr(child_geometry, "reference_rgb", rgb_reference)
                         constraint_child_to_parent(reference, child_geometry)
                         update_geometry(child_geometry)
             return
@@ -1224,6 +1233,9 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                     if hasattr(geometry, "reference_root"):
                         root_reference = getattr(geometry, "reference_root")
                         setattr(child_geometry, "reference_root", root_reference)
+                    if hasattr(geometry, "reference_rgb"):
+                        rgb_reference = getattr(geometry, "reference_rgb")
+                        setattr(child_geometry, "reference_rgb", rgb_reference)
                     constraint_child_to_parent(geometry, child_geometry)
                     update_geometry(child_geometry)
 
@@ -1399,6 +1411,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
     gobo_material = random_gobo = None
     mode = FixtureMode(gdtf_profile)
     has_gobos = has_blend = False
+    color_controller = set()
     channels = []
     wheels = []
 
@@ -1441,6 +1454,10 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
     virtual_channels = pygdtf.utils.get_virtual_channels(gdtf_profile, mode)
 
     for channel in channels:
+        if 'Color' in channel['ID']:
+            color_attribute = channel.get('ID')
+            if color_attribute[-1] in {'R','G','B','C','M','Y'}:
+                color_controller.add(channel.get('Geometry'))
         if 'Gobo' in channel['ID']:
             gobo_functions = channel.get('Functions')
             for function in gobo_functions:
@@ -1464,6 +1481,10 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
             zoom_range = zoom_functions[0].physical_from, zoom_functions[0].physical_to
 
     for virtual in virtual_channels:
+        if 'Color' in virtual['id']:
+            color_attribute = virtual.get('id')
+            if color_attribute[-1] in {'R','G','B','C','M','Y'}:
+                color_controller.add(virtual.get('Geometry'))
         if 'Gobo' in virtual['id']:
             gobo_functions = virtual.get('Functions')
             for function in gobo_functions:
@@ -1514,6 +1535,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
         for obj in model_collection.objects:
             linkDict[obj.name] = obj
             viewlayer.objects.active = obj
+            check_color = obj.get('RGB')
             if TARGETS and len(obj.constraints):
                 target = obj.get('Target ID')
                 locked = obj.constraints.get('Locked Track')
@@ -1543,7 +1565,8 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 obj.id_properties_ensure()
                 target_property = obj.id_properties_ui('Target')
                 target_property.update(default=TARGETS)
-                create_color_property(obj, gelcolor, 'RGB Beam')
+                if len(color_controller):
+                    create_color_property(obj, gelcolor, 'RGB Beam')
                 ob_name = fixture_name if fixture is None else name
                 obj.matrix_world = position @ obj.matrix_world.copy()
                 obj.name = index_name(ob_name)
@@ -1588,7 +1611,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 emit_material['Geometry Type'] = 'Beam'
                 emit_shader = PrincipledBSDFWrapper(emit_material, is_readonly=False, use_nodes=True)
                 emit_shader.emission_strength = 1.0
-                emit_shader.emission_color = gelcolor[:]
+                emit_shader.emission_color = gelcolor[:] if check_color else [1.0] * 3
             elif obj.get('Geometry Type') == 'Glow' and obj.type == 'MESH':
                 obj.hide_select = True
                 glowname ='ID%d_%s_Glow' % (fixture_id, fixture_name) if fixture_id >= 1 else '%s_Glow' % fixture_name
@@ -1607,7 +1630,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 glow_material['Geometry Type'] = 'Glow'
                 glow_shader = PrincipledBSDFWrapper(glow_material, is_readonly=False, use_nodes=True)
                 glow_shader.emission_strength = 1.0
-                glow_shader.emission_color = random_glow[:]
+                glow_shader.emission_color = random_glow[:] if check_color else [1.0] * 3
             elif obj.get('Geometry Type') == 'Target':
                 obj.name = index_name(obj.name)
                 obj.matrix_world = focus_point
@@ -1619,15 +1642,16 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 obj.hide_set(True)
 
         for obj in model_collection.objects:
+            check_color = obj.get('RGB')
             for child in obj.children:
                 if child.name in linkDict:
                     linkDict[child.name].parent = obj
+                    if check_color:
+                        linkDict[child.name]['RGB'] = True
                 child.name = index_name(child.name)
             if obj.type == 'LIGHT':
                 zoom_angle = obj.get('Focus')
                 light_temperature = obj.get('Temperature')
-                create_dimmer_driver(obj.data, root_object, obj)
-                create_color_driver(obj.data, root_object, 'RGB Beam')
                 nodes = obj.data.node_tree.nodes
                 links = obj.data.node_tree.links
                 gamma_node = nodes.get('Gamma')
@@ -1639,6 +1663,9 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 light_uv = nodes.get('Light Orientation')
                 lightcontrast = nodes.get('Light Contrast')
                 color_temp = nodes.get('Color Temperature')
+                create_dimmer_driver(obj.data, root_object, obj)
+                if check_color:
+                    create_color_driver(obj.data, root_object, 'RGB Beam')
                 if has_blend:
                     create_factor_driver(obj, root_object)
                 if has_focus:
@@ -1749,14 +1776,16 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                     beam_material = obj.data.materials[0]
                     beam_material.use_nodes = True
                     principled_node = beam_material.node_tree.nodes.get('Principled BSDF')
-                    create_color_driver(principled_node.inputs['Emission Color'], root_object, 'RGB Beam')
+                    if check_color:
+                        create_color_driver(principled_node.inputs['Emission Color'], root_object, 'RGB Beam')
                     create_dimmer_driver(principled_node.inputs['Emission Strength'], root_object, obj)
                 elif obj.get('Geometry Type') == 'Glow':
                     glow_material = obj.data.materials[0]
                     glow_material.use_nodes = True
-                    create_color_property(root_object, random_glow, 'RGB Glow')
                     principled_node = glow_material.node_tree.nodes.get('Principled BSDF')
-                    create_color_driver(principled_node.inputs['Emission Color'], root_object, 'RGB Glow')
+                    if check_color:
+                        create_color_property(root_object, random_glow, 'RGB Glow')
+                        create_color_driver(principled_node.inputs['Emission Color'], root_object, 'RGB Glow')
                     create_dimmer_driver(principled_node.inputs['Emission Strength'], root_object, obj)   
                 elif obj.get('Geometry Type') == 'Gobo':
                     gobo_material = obj.data.materials[0]
@@ -1916,7 +1945,6 @@ def load_prepare(context, filename, global_matrix, collect, align_objects, align
 
     name = Path(filename).stem
     mscale = mathutils.Matrix.Scale(scale_objects, 4)
-
     if global_matrix is not None:
         mscale = global_matrix @ mscale
 
