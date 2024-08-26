@@ -1610,6 +1610,8 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                     obj.data.materials.clear()
                     emit_material = bpy.data.materials.new(beamname)
                     obj.data.materials.append(emit_material)
+                    if emit_color:
+                        emit_material['RGB'] = emit_color
                 obj.active_material = emit_material
                 create_gdtf_props(emit_material, fixture_name)
                 emit_material['Fixture ID'] = fixture_id
@@ -1632,6 +1634,8 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                     obj.data.materials.clear()
                     glow_material = bpy.data.materials.new(glowname)
                     obj.data.materials.append(glow_material)
+                    if glow_color:
+                        glow_material['RGB'] = glow_color
                 obj.active_material = glow_material
                 create_gdtf_props(glow_material, fixture_name)
                 glow_material['Fixture ID'] = fixture_id
