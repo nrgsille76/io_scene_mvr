@@ -435,21 +435,6 @@ def create_trackball_property(item, prop, targets):
     pt_property.update(default=vec, min=-1.0, max=1.0, soft_min=-1.0, soft_max=1.0, precision=8, step=0.00001, subtype='DIRECTION')
 
 
-def create_transform_property(obj):
-    mtx_copy = obj.matrix_basis.copy()
-    translate = mtx_copy.to_translation()
-    rotate = mtx_copy.to_3x3().inverted()
-    rota_translate = rotate[0][:]+rotate[1][:]+rotate[2][:]+translate[:]
-    obj['Transform'] = rota_translate
-
-
-def rotation_translate(rota_mtx):
-    mtx = list(rota_mtx)
-    rota_invert = mathutils.Matrix((mtx[:3]+[0], mtx[3:6]+[0], mtx[6:9]+[0])).inverted()
-    matrix = mathutils.Matrix.Translation((mtx[9], mtx[10], mtx[11])) @ rota_invert.to_4x4()
-    return matrix
-
-
 def collect_dmx_channels(gdtf_profile, mode):
     dmx_mode = None
     dmx_channels = []
@@ -573,50 +558,45 @@ def load_gdtf_primitive(model):
     return obj
 
 
-def create_iris_nodes(item, root, inputnode, outputnode):
+def create_iris_nodes(item, root, irisnode, outputnode):
     check_spot = item.id_type == 'LIGHT'
     iris_nodes = item.node_tree.nodes
     iris_links = item.node_tree.links
     create_dimmer_property(root, 'Iris', 0)
-    iris_node = iris_nodes.new('ShaderNodeTexImage')
     add_node = iris_nodes.new('ShaderNodeVectorMath')
     iris_gobo = bpy.data.images.get("open.png", False)
     scale_node = iris_nodes.new('ShaderNodeVectorMath')
     center_node = iris_nodes.new('ShaderNodeVectorMath')
     cord_output = outputnode.outputs[5] if check_spot else outputnode.outputs[2]
     center_node.inputs[1].default_value[:2] = add_node.inputs[1].default_value[:2] = [0.5] * 2
-    center_node.location = (-1380, 180) if check_spot else (-980, 120)
-    scale_node.location = (-1180, 150) if check_spot else (-820, 150)
-    iris_node.location = (-500, 150) if check_spot else (-100, 170)
-    add_node.location = (-980, 150) if check_spot else (-620, 150)
-    inputnode.location = (-320, 340) if check_spot else (100, 340)
-    inputnode.blend_type = 'DARKEN' if check_spot else 'MULTIPLY'
+    center_node.location = (-1540, 180) if check_spot else (-1240, 120)
+    scale_node.location = (-1340, 150) if check_spot else (-1040, 150)
+    add_node.location = (-1160, 150) if check_spot else (-840, 150)
+    irisnode.location = (-700, 150) if check_spot else (-300, 150)
     center_node.inputs[1].hide = add_node.inputs[1].hide = True
     scale_node.label = scale_node.name = 'Iris Size'
     center_node.label = center_node.name = 'Center'
     add_node.label = add_node.name = 'Iris Vector'
-    inputnode.label = inputnode.name = 'Iris Mix'
     center_node.operation = 'SUBTRACT'
     scale_node.operation = 'SCALE'
     add_node.operation = 'ADD'
     if not check_spot:
-        outputnode.location = (-1180, 160)
+        outputnode.location = (-1440, 160)
     if not iris_gobo:
         gobo_path = os.path.join(get_folder_path(), "primitives", "open.png")
         iris_gobo = bpy.data.images.load(gobo_path)
         iris_gobo.alpha_mode = 'CHANNEL_PACKED'
-    iris_node.image = iris_gobo
-    iris_node.outputs[1].hide = True
-    iris_node.show_options = False
-    iris_node.extension = 'EXTEND'
-    iris_node.height = 100
-    iris_node.width = 140
-    iris_node.label = iris_node.name = 'Iris'
+    irisnode.image = iris_gobo
+    irisnode.outputs[1].hide = True
+    irisnode.show_options = False
+    irisnode.extension = 'EXTEND'
+    irisnode.height = 100
+    irisnode.width = 140
+    irisnode.label = irisnode.name = 'Iris'
     iris_links.new(cord_output, center_node.inputs[0])
     iris_links.new(center_node.outputs[0], scale_node.inputs[0])
     iris_links.new(scale_node.outputs[0], add_node.inputs[0])
-    iris_links.new(add_node.outputs[0], iris_node.inputs[0])
-    iris_links.new(iris_node.outputs[0], inputnode.inputs[2])
+    iris_links.new(add_node.outputs[0], irisnode.inputs[0])
     scale_curve = scale_node.inputs[3].driver_add("default_value")
     scale_drive = scale_curve.driver
     scale_drive.type = 'SCRIPTED'
@@ -1066,7 +1046,6 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
             create_range_property(light_object, beam_angle, 'Focus')
             create_range_property(light_data, beam_angle, 'Focus')
         obj_child.matrix_parent_inverse = light_object.matrix_world.inverted()
-        create_transform_property(light_object)
         collection.objects.link(light_object)
 
         gobo_radius = 2.2 * 0.01 * math.tan(math.radians(geometry.beam_angle / 2))
@@ -1112,11 +1091,11 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
             light_mix.inputs[1].default_value[:3] = [1.0] * 3
             light_mix.inputs[2].default_value[:3] = [1.0] * 3
             factor_node.outputs[0].default_value = focus_factor
-            light_uv.location = (-1580, 300) if has_gobos else(-1300, 300)
-            lightpath.location = (-1180, 320) if has_gobos else (-900, 320)
-            layerweight.location = (-980, 440) if has_gobos else (-700, 440)
-            fresnel_node.location = (-1180, 420) if has_gobos else (-900, 420)
-            light_normal.location = (-1380, 400) if has_gobos else (-1100, 400)
+            lightpath.location = (-1340, 320) if has_gobos else (-900, 320)
+            light_uv.location = (-1720, 300) if has_gobos else (-1300, 300)
+            layerweight.location = (-1160, 440) if has_gobos else (-700, 440)
+            fresnel_node.location = (-1340, 420) if has_gobos else (-900, 420)
+            light_normal.location = (-1540, 400) if has_gobos else (-1100, 400)
             links.new(layerweight.outputs[0], lightcontrast.inputs[2])
             links.new(layerweight.outputs[1], lightcontrast.inputs[1])
             links.new(light_normal.outputs[0], fresnel_node.inputs[1])
@@ -1184,7 +1163,6 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         rotation = geometry_mtx.to_3x3().inverted()
         scale = geometry_mtx.to_scale()
         obj_child.matrix_local = mathutils.Matrix.LocRotScale(translate, rotation, scale)
-        create_transform_property(obj_child)
 
 
     def constraint_child_to_parent(parent_geometry, child_geometry):
@@ -1329,7 +1307,6 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                             obj_target.location = (obj.location.x, obj.location.y, 0)
                         elif center_object and not center_parent:
                             obj_target.location = (obj.parent.location.x, obj.parent.location.y, 0)
-                        create_transform_property(obj_target)
                         lock_constraint.target = obj_target
         limit_constraint = obj.constraints.new('LIMIT_ROTATION')
         range_min = math.radians(min(rangeData.get(obj.get('Original Name'))))
@@ -1604,7 +1581,6 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 ob_name = fixture_name if fixture is None else name
                 obj.matrix_world = position @ obj.matrix_world.copy()
                 obj.name = index_name(ob_name)
-                create_transform_property(obj)
                 obj['UUID'] = uid
             elif obj.get('Geometry Type') == 'Gobo':
                 obj.select_set(False)
@@ -1633,7 +1609,6 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
             elif obj.get('Geometry Type') == 'Target':
                 obj.name = index_name(obj.name)
                 obj.matrix_world = focus_point
-                create_transform_property(obj)
             elif obj.get('2D Symbol', None) == "all":
                 obj.name = index_name('2D Symbol')
                 obj.hide_viewport = True
@@ -1656,6 +1631,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 gamma_node = nodes.get('Gamma')
                 emit_node = nodes.get('Fixture')
                 light_mix = nodes.get('Light Mix')
+                light_path = nodes.get('Light Path')
                 focus_node = nodes.get('Focus Factor')
                 light_output = nodes.get('Light Output')
                 lightfalloff = nodes.get('Light Falloff')
@@ -1679,6 +1655,25 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                     create_zoom_driver(obj.data, root_object, 'Focus Zoom')
                 elif zoom_angle:
                     create_zoom_driver(obj.data, root_object, 'Focus')
+                if has_iris:
+                    iris_node = nodes.new('ShaderNodeTexImage')
+                    iris_out = iris_node
+                    if has_gobos:
+                        iris_mix = nodes.new('ShaderNodeMixRGB')
+                        iris_mix.label = iris_mix.name = 'Iris Mix'
+                        iris_mix.blend_type = 'DARKEN'
+                        iris_mix.location = (-500, 340)
+                        iris_out = iris_mix
+                    create_iris_nodes(obj.data, root_object, iris_node, light_uv)
+                    emit_node.location = (300, 300)
+                    light_mix.location = (100, 340)
+                    iris_mix.location = (-500, 340)
+                    color_temp.location = (-100, 200)
+                    focus_node.location = (-500, 150)
+                    gamma_node.location = (-300, 340)
+                    light_output.location = (500, 300)
+                    lightfalloff.location = (-300, 220)
+                    lightcontrast.location = (-100, 360)
                 if has_gobos and start_gobo is not None:
                     obj.data.shadow_buffer_clip_start = 0.001
                     obj.location[2] += 0.01
@@ -1690,13 +1685,16 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                     wheel_node.image = start_gobo
                     create_gobo_driver(wheel_node, wheel_rota, root_object, gobo_count)
                     wheel_node.extension = 'EXTEND'
-                    wheel_node.location = (-800, 440)
-                    wheel_rota.location = (-980, 310)
+                    wheel_node.location = (-980, 440)
+                    wheel_rota.location = (-1160, 310)
+                    post_input = gamma_node.inputs[0]
+                    pre_node = wheel_node
+                    if has_iris:
+                        post_input = iris_mix.inputs[1]
                     emit_node.inputs[0].default_value[:3] = gelcolor[:]
                     links.new(light_uv.outputs[5], wheel_rota.inputs[0])
                     links.new(wheel_rota.outputs[0], wheel_node.inputs[0])
                     links.new(wheel_node.outputs[0], gamma_node.inputs[0])
-                    pre_node = wheel_node
                     if check_wheels:
                         for idx, wheel in enumerate(list(gobo_data.keys())[1:], 2):
                             start = gobo_data.get(wheel)
@@ -1704,7 +1702,6 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                             align_x = int((idx - 2) * 280)
                             align_y = int((idx - 2) * -160)
                             slot_count = start.get('Count')
-                            light_path = nodes.get('Light Path')
                             gobo_mix = nodes.new('ShaderNodeMixRGB')
                             gobo_node = nodes.new('ShaderNodeTexImage')
                             rota_node = nodes.new('ShaderNodeVectorRotate')
@@ -1719,16 +1716,19 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                             gobo_node.label = gobo_node.name = gobo_name
                             create_gobo_property(root_object, slot_count, gobo_name)
                             create_gobo_driver(gobo_node, rota_node, root_object, slot_count)
-                            lightcontrast.location = (-300 + align_x, 360)
-                            lightfalloff.location = (-500 + align_x, 220)
-                            light_output.location = (300 + align_x, 300)
-                            color_temp.location = (-300 + align_x, 220)
-                            gamma_node.location = (-500 + align_x, 340)
-                            light_mix.location = (-100 + align_x, 360)
+                            light_mix.location = (100 + align_x, 360)
                             emit_node.location = (100 + align_x, 320)
-                            gobo_node.location = (-800 + align_x, 40)
-                            rota_node.location = (-980, 40 + align_y)
-                            gobo_mix.location = (-500 + align_x, 340)
+                            gobo_node.location = (-980 + align_x, 40)
+                            rota_node.location = (-1160, 40 + align_y)
+                            color_temp.location = (-100 + align_x, 220)
+                            gamma_node.location = (-300 + align_x, 340)
+                            focus_node.location = (-500 + align_x, 150)
+                            light_output.location = (300 + align_x, 300)
+                            lightfalloff.location = (-300 + align_x, 220)
+                            lightcontrast.location = (-100 + align_x, 360)
+                            gobo_mix.location = (-700 + align_x, 340) if has_iris else (-500 + align_x, 340)
+                            if has_iris:
+                                iris_mix.location = (-500 + align_x, 340)
                             gobo_mix.inputs[1].default_value[:3] = [1.0] * 3
                             gobo_mix.inputs[2].default_value[:3] = [1.0] * 3
                             links.new(pre_node.outputs[0], gobo_mix.inputs[1])
@@ -1748,28 +1748,10 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                     if obj.parent and obj.parent.parent and obj.parent.parent.dimensions.z < 0.05:
                         obj.location[2] += -0.02
                 if has_iris:
-                    iris_mix = nodes.new('ShaderNodeMixRGB')
-                    create_iris_nodes(obj.data, root_object, iris_mix, light_uv)
-                    mix_pos = light_mix.location.x + 400 if check_wheels else 200
-                    emit_pos = emit_node.location.x + 400 if check_wheels else 200
-                    temp_pos = color_temp.location.x + 400 if check_wheels else 200
-                    gamma_pos = gamma_node.location.x + 400 if check_wheels else 200
-                    focus_pos = focus_node.location.x + 400 if check_wheels else 200
-                    output_pos = light_output.location.x + 400 if check_wheels else 200
-                    lightfall_pos = lightfalloff.location.x + 400 if check_wheels else 200
-                    lightcontrast_pos = lightcontrast.location.x + 400 if check_wheels else 200
-                    focus_node.location = (focus_pos, 150)
-                    light_mix.location = (mix_pos, 340)
-                    emit_node.location = (emit_pos, 300)
-                    color_temp.location = (temp_pos, 200)
-                    gamma_node.location = (gamma_pos, 340)
-                    light_output.location = (output_pos, 300)
-                    iris_mix.location = (gamma_pos - 200, 340)
-                    lightfalloff.location = (lightfall_pos, 220)
-                    lightcontrast.location = (lightcontrast_pos, 360)
                     links.new(pre_node.outputs[0], iris_mix.inputs[1])
+                    links.new(iris_node.outputs[0], iris_mix.inputs[2])
                     links.new(light_path.outputs[7], iris_mix.inputs[0])
-                    links.new(iris_mix.outputs[0], gamma_node.inputs[0])
+                    links.new(iris_out.outputs[0], gamma_node.inputs[0])
             elif obj.type == 'MESH' and len(obj.data.materials):
                 if obj.get('Geometry Type') == 'Beam':
                     emit_color = obj.get('RGB', False)
@@ -1815,9 +1797,10 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                         wheel_node.extension = 'EXTEND'
                         wheel_node.image = start_gobo
                         previous_node = wheel_node
-                        gobo_cord.location = (-800, 90)
-                        wheel_node.location = (-420, 460)
-                        wheel_rota.location = (-620, 310)
+                        follow_node = opacity_node
+                        gobo_cord.location = (-1040, 90)
+                        wheel_node.location = (-620, 460)
+                        wheel_rota.location = (-840, 310)
                         opacity_node.location = (100, 300)
                         create_gobo_driver(wheel_node, wheel_rota, root_object, gobo_count)
                         gobo_links.new(gobo_cord.outputs[0], wheel_rota.inputs[0])
@@ -1838,8 +1821,8 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                                 if not light_fall:
                                     light_path = gobo_nodes.new('ShaderNodeLightPath')
                                     light_fall = gobo_nodes.new('ShaderNodeLightFalloff')
-                                    light_fall.location = (-620, 460)
-                                    light_path.location = (-820, 460)
+                                    light_fall.location = (-840, 460)
+                                    light_path.location = (-1040, 460)
                                     gobo_links.new(light_path.outputs[1], light_fall.inputs[0])
                                     gobo_links.new(light_path.outputs[8], light_fall.inputs[1])
                                 gobo_node.color_mapping.blend_type = 'LINEAR_LIGHT'
@@ -1851,11 +1834,11 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                                 gobo_mix.label = gobo_mix.name = mix_name
                                 rota_node.label = rota_node.name = '%s Rotate' % gobo_name
                                 gobo_node.label = gobo_node.name = gobo_name
-                                gobo_node.location = (-420 + align_x, 40)
-                                rota_node.location = (-620, 40 + align_y)
-                                gobo_mix.location = (-100 + align_x, 340)
+                                gobo_node.location = (-620 + align_x, 40)
+                                rota_node.location = (-840, 40 + align_y)
                                 opacity_node.location = (100 + align_x, 300)
                                 material_node.location = (300 + align_x, 300)
+                                gobo_mix.location = (-300 + align_x, 340) if has_iris else (-100 + align_x, 340)
                                 gobo_mix.inputs[1].default_value[:3] = [1.0] * 3
                                 gobo_mix.inputs[2].default_value[:3] = gelcolor[:]
                                 create_gobo_driver(gobo_node, rota_node, root_object, slot_count)
@@ -1868,21 +1851,23 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                                 previous_node = gobo_mix
                         if has_iris:
                             light_fall = gobo_nodes.get('Light Falloff', False)
+                            iris_node = gobo_nodes.new('ShaderNodeTexImage')
+                            iris_mix = gobo_nodes.new('ShaderNodeMixRGB')
+                            iris_mix.label = iris_mix.name = 'Iris Mix'
+                            iris_mix.blend_type = 'MULTIPLY'
+                            iris_mix.location = (-100 + max(wheel_count - 2, 0) * 200, 340)
                             if not light_fall:
                                 light_path = gobo_nodes.new('ShaderNodeLightPath')
                                 light_fall = gobo_nodes.new('ShaderNodeLightFalloff')
-                                light_fall.location = (-620, 460)
-                                light_path.location = (-820, 460)
+                                light_fall.location = (-840, 460)
+                                light_path.location = (-1040, 460)
                                 gobo_links.new(light_path.outputs[1], light_fall.inputs[0])
                                 gobo_links.new(light_path.outputs[8], light_fall.inputs[1])
-                            iris_mix = gobo_nodes.new('ShaderNodeMixRGB')
-                            create_iris_nodes(gobo_material, root_object, iris_mix, gobo_cord)
+                            create_iris_nodes(gobo_material, root_object, iris_node, gobo_cord)
                             if check_wheels:
-                                opacity_pos = opacity_node.location.x + 200
-                                material_pos = material_node.location.x + 200
-                                opacity_node.location = (opacity_pos, 320)
-                                material_node.location = (material_pos, 300)
-                            iris_mix.location = (opacity_node.location.x - 200, 340)
+                                opacity_node.location = (100 + max(wheel_count - 2, 0) * 200, 320)
+                                material_node.location = (300 + max(wheel_count - 2, 0) * 200, 300)
+                            gobo_links.new(iris_node.outputs[0], iris_mix.inputs[2])
                             gobo_links.new(previous_node.outputs[0], iris_mix.inputs[1])
                             gobo_links.new(iris_mix.outputs[0], opacity_node.inputs[0])
                             gobo_links.new(light_fall.outputs[0], iris_mix.inputs[0])
