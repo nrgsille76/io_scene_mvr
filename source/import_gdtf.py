@@ -1454,7 +1454,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
         uid = fixture.uuid
         mode = fixture.gdtf_mode
         color = convert_color(gelcolor)
-        gelcolor = list((255/1) * i for i in color[:3])
+        gelcolor = list(i * 0.01 for i in color[:3])
 
     def index_name(device):
         device_name = device
