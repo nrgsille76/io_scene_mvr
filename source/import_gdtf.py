@@ -1402,6 +1402,33 @@ def get_tilt(model_collection, channels):
                 return obj
 
 
+def get_emit_material(obj, color, name, index, prop):
+    obj.hide_select = True
+    emit_color = obj.get('RGB')
+    beamname ='ID%d_%s_%s' % (index, name, prop) if index >= 1 else '%s_%s' % (name, prop)
+    if len(obj.data.materials):
+        emit_material = obj.data.materials[0]
+        emit_material['Fixture ID'] = index
+        emit_material.name = beamname
+    else:
+        emit_material = bpy.data.materials.get(beamname)
+    if emit_material is None or emit_material.get('Fixture ID') != index or emit_material.get('RGB') != emit_color:
+        obj.data.materials.clear()
+        emit_material = bpy.data.materials.new(beamname)
+        obj.data.materials.append(emit_material)
+        if emit_color:
+            emit_material['RGB'] = emit_color
+    obj.active_material = emit_material
+    create_gdtf_props(emit_material, name)
+    emit_material['Fixture ID'] = index
+    emit_material.shadow_method = 'NONE'
+    emit_material['Geometry Type'] = 'Beam'
+    emit_shader = PrincipledBSDFWrapper(emit_material, is_readonly=False, use_nodes=True)
+    emit_shader.emission_strength = 1.0
+    emit_shader.emission_color = color[:] if emit_color else emit_shader.base_color[:]
+
+
+
 def fixture_build(context, filename, mscale, name, position, focus_point, fixture_id,
                   gelcolor, collect, fixture, TARGETS=True, BEAMS=True, CONES=False):
 
@@ -1597,53 +1624,9 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 wheel_material.shadow_method = 'CLIP'
                 wheel_material.blend_method = 'BLEND'
             elif obj.get('Geometry Type') == 'Beam' and obj.type == 'MESH':
-                obj.hide_select = True
-                emit_color = obj.get('RGB')
-                beamname ='ID%d_%s_Beam' % (fixture_id, fixture_name) if fixture_id >= 1 else '%s_Beam' % fixture_name
-                if len(obj.data.materials):
-                    emit_material = obj.data.materials[0]
-                    emit_material['Fixture ID'] = fixture_id
-                    emit_material.name = beamname
-                else:
-                    emit_material = bpy.data.materials.get(beamname)
-                if emit_material is None or emit_material.get('Fixture ID') != fixture_id or emit_material.get('RGB') != emit_color:
-                    obj.data.materials.clear()
-                    emit_material = bpy.data.materials.new(beamname)
-                    obj.data.materials.append(emit_material)
-                    if emit_color:
-                        emit_material['RGB'] = emit_color
-                obj.active_material = emit_material
-                create_gdtf_props(emit_material, fixture_name)
-                emit_material['Fixture ID'] = fixture_id
-                emit_material.shadow_method = 'NONE'
-                emit_material['Geometry Type'] = 'Beam'
-                emit_shader = PrincipledBSDFWrapper(emit_material, is_readonly=False, use_nodes=True)
-                emit_shader.emission_strength = 1.0
-                emit_shader.emission_color = gelcolor[:] if emit_color else emit_shader.base_color[:]
+                get_emit_material(obj, gelcolor, fixture_name, fixture_id, 'Beam')
             elif obj.get('Geometry Type') == 'Glow' and obj.type == 'MESH':
-                obj.hide_select = True
-                glow_color = obj.get('RGB')
-                glowname ='ID%d_%s_Glow' % (fixture_id, fixture_name) if fixture_id >= 1 else '%s_Glow' % fixture_name
-                if len(obj.data.materials):
-                    glow_material = obj.data.materials[0]
-                    glow_material['Fixture ID'] = fixture_id
-                    glow_material.name = glowname
-                else:
-                    glow_material = bpy.data.materials.get(glowname)
-                if glow_material is None or glow_material.get('Fixture ID') != fixture_id or glow_material.get('RGB') != glow_color:
-                    obj.data.materials.clear()
-                    glow_material = bpy.data.materials.new(glowname)
-                    obj.data.materials.append(glow_material)
-                    if glow_color:
-                        glow_material['RGB'] = glow_color
-                obj.active_material = glow_material
-                create_gdtf_props(glow_material, fixture_name)
-                glow_material['Fixture ID'] = fixture_id
-                glow_material.shadow_method = 'NONE'
-                glow_material['Geometry Type'] = 'Glow'
-                glow_shader = PrincipledBSDFWrapper(glow_material, is_readonly=False, use_nodes=True)
-                glow_shader.emission_strength = 1.0
-                glow_shader.emission_color = random_glow[:] if glow_color else glow_shader.base_color[:]
+                get_emit_material(obj, gelcolor, fixture_name, fixture_id, 'Glow')
             elif obj.get('Geometry Type') == 'Target':
                 obj.name = index_name(obj.name)
                 obj.matrix_world = focus_point
@@ -1960,7 +1943,6 @@ def load_prepare(context, filename, global_matrix, collect, align_objects, align
 
     name = Path(filename).stem
     mscale = mathutils.Matrix.Scale(scale_objects, 4)
-
     if global_matrix is not None:
         mscale = global_matrix @ mscale
 
