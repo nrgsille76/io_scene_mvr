@@ -747,7 +747,6 @@ def load_model(profile, name, model):
     if model.file.extension.lower() == '3ds':
         inside_zip_path = f"models/3ds/{model.file.name}.{model.file.extension}"
         file_name = os.path.join(folder_path, inside_zip_path)
-        print('filename', file_name)
         try:
             profile._package.extract(inside_zip_path, folder_path)
             load_3ds(file_name, bpy.context, FILTER={'MESH'}, KEYFRAME=False, APPLY_MATRIX=False)
@@ -761,7 +760,6 @@ def load_model(profile, name, model):
         inside_zip_path = f"models/gltf/{model.file.name}.{model.file.extension}"
         profile._package.extract(inside_zip_path, folder_path)
         file_name = os.path.join(folder_path, inside_zip_path)
-        print('filename', file_name)
         bpy.ops.import_scene.gltf(filepath=file_name)
         for ob in bpy.context.selected_objects:
             ob.data['Model Type'] = model.file.extension.lower()
