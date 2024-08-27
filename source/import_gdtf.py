@@ -729,9 +729,7 @@ def load_model(profile, name, model):
         file_name = os.path.join(folder_path, inside_zip_path)
         try:
             profile._package.extract(inside_zip_path, folder_path)
-            load_3ds(file_name, bpy.context, FILTER={'MESH'}, KEYFRAME=False, APPLY_MATRIX=False)
-            for ob in bpy.context.selected_objects:
-                ob.data['Model Type'] = model.file.extension.lower()
+            load_3ds(file_name, bpy.context, FILTER={'MESH'}, KEYFRAME=False, APPLY_MATRIX=False)   
         except:
             alternative = load_blender_primitive(model)
             bpy.context.view_layer.active_layer_collection.collection.objects.link(alternative)
@@ -741,8 +739,6 @@ def load_model(profile, name, model):
         profile._package.extract(inside_zip_path, folder_path)
         file_name = os.path.join(folder_path, inside_zip_path)
         bpy.ops.import_scene.gltf(filepath=file_name)
-        for ob in bpy.context.selected_objects:
-            ob.data['Model Type'] = model.file.extension.lower()
     objects = list(bpy.context.selected_objects)
 
     # if the model is made up of multiple parts we must join them
@@ -750,12 +746,14 @@ def load_model(profile, name, model):
     obj.rotation_mode = 'XYZ'
     scale_vector = obj.scale * obj_dimension
     factor = mathutils.Vector([scale_vector[val] / max(obj.dimensions[val], 1e-09) for val in range(3)])
-    if obj.data.get('Model Type') == '3ds':
-        obj.data.transform(mathutils.Matrix.Diagonal(factor).to_4x4())
+    if model.file.extension.lower() == "3ds":
+        if obj.data:
+            obj.data.transform(mathutils.Matrix.Diagonal(factor).to_4x4())
     else:
         obj.scale = factor
     if obj.data:
         obj.data.name = model.file.name
+        obj.data['Model Type'] = model.file.extension.lower()
     return obj
 
 
@@ -1576,8 +1574,6 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 obj.id_properties_ensure()
                 target_property = obj.id_properties_ui('Target')
                 target_property.update(default=TARGETS)
-                if len(color_controller):
-                    create_color_property(obj, gelcolor, 'RGB Beam')
                 ob_name = fixture_name if fixture is None else name
                 obj.matrix_world = position @ obj.matrix_world.copy()
                 obj.name = index_name(ob_name)
@@ -1617,6 +1613,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
 
         for obj in model_collection.objects:
             check_color = obj.get('RGB')
+            rgb_beam = root_object.get('RGB Beam')
             for child in obj.children:
                 if child.name in linkDict:
                     linkDict[child.name].parent = obj
@@ -1625,7 +1622,6 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 child.name = index_name(child.name)
             if obj.type == 'LIGHT':
                 zoom_angle = obj.get('Focus')
-                light_temperature = obj.get('Temperature')
                 nodes = obj.data.node_tree.nodes
                 links = obj.data.node_tree.links
                 gamma_node = nodes.get('Gamma')
@@ -1636,10 +1632,13 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 light_output = nodes.get('Light Output')
                 lightfalloff = nodes.get('Light Falloff')
                 light_uv = nodes.get('Light Orientation')
+                light_temperature = obj.get('Temperature')
                 lightcontrast = nodes.get('Light Contrast')
                 color_temp = nodes.get('Color Temperature')
                 create_dimmer_driver(obj.data, root_object, obj)
                 if check_color:
+                    if rgb_beam is None:
+                        create_color_property(root_object, gelcolor, 'RGB Beam')
                     create_color_driver(obj.data, root_object, 'RGB Beam')
                 if has_blend:
                     create_factor_driver(obj, root_object)
@@ -1678,22 +1677,19 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                     obj.location[2] += 0.01
                     wheel_node = nodes.new('ShaderNodeTexImage')
                     wheel_rota = nodes.new('ShaderNodeVectorRotate')
+                    wheel_node.image = start_gobo
+                    wheel_node.extension = 'EXTEND'
+                    wheel_node.label = wheel_node.name = wheel_name
                     wheel_rota.label = wheel_rota.name = '%s Rotate' % wheel_name
                     wheel_node.color_mapping.blend_type = 'LINEAR_LIGHT'
-                    wheel_node.label = wheel_node.name = wheel_name
-                    wheel_node.image = start_gobo
-                    create_gobo_driver(wheel_node, wheel_rota, root_object, gobo_count)
-                    wheel_node.extension = 'EXTEND'
                     wheel_node.location = (-980, 440)
                     wheel_rota.location = (-1160, 310)
-                    post_input = gamma_node.inputs[0]
-                    pre_node = wheel_node
-                    if has_iris:
-                        post_input = iris_mix.inputs[1]
                     emit_node.inputs[0].default_value[:3] = gelcolor[:]
+                    create_gobo_driver(wheel_node, wheel_rota, root_object, gobo_count)
                     links.new(light_uv.outputs[5], wheel_rota.inputs[0])
                     links.new(wheel_rota.outputs[0], wheel_node.inputs[0])
                     links.new(wheel_node.outputs[0], gamma_node.inputs[0])
+                    pre_node = wheel_node
                     if check_wheels:
                         for idx, wheel in enumerate(list(gobo_data.keys())[1:], 2):
                             start = gobo_data.get(wheel)
@@ -1704,12 +1700,12 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                             gobo_mix = nodes.new('ShaderNodeMixRGB')
                             gobo_node = nodes.new('ShaderNodeTexImage')
                             rota_node = nodes.new('ShaderNodeVectorRotate')
-                            mix_name = 'Gobo %d Mix' % (idx - 1) if idx > 2 else 'Gobo Mix'
                             root_object['%s Select' % gobo_name] = 0
                             gobo_node.image = start
                             gobo_mix.blend_type = 'DARKEN'
                             gobo_node.extension = 'EXTEND'
                             gobo_node.color_mapping.blend_type = 'LINEAR_LIGHT'
+                            mix_name = 'Gobo %d Mix' % (idx - 1) if idx > 2 else 'Gobo Mix'
                             gobo_mix.label = gobo_mix.name = mix_name
                             rota_node.label = rota_node.name = '%s Rotate' % gobo_name
                             gobo_node.label = gobo_node.name = gobo_name
@@ -1759,6 +1755,8 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                     beam_material.use_nodes = True
                     principled_node = beam_material.node_tree.nodes.get('Principled BSDF')
                     if emit_color:
+                        if rgb_beam is None:
+                            create_color_property(root_object, gelcolor, 'RGB Beam')
                         create_color_driver(principled_node.inputs['Emission Color'], root_object, 'RGB Beam')
                     create_dimmer_driver(principled_node.inputs['Emission Strength'], root_object, obj)
                 elif obj.get('Geometry Type') == 'Glow':
