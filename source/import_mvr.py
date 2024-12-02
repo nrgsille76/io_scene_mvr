@@ -106,7 +106,6 @@ def add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path, fixture_id
     fixture_pos = get_matrix(fixture, mscale)
     fixture_file = os.path.join(folder_path, fixture.gdtf_spec)
     existing_fixture = os.path.isfile(fixture_file)
-    print('fixtureid', fixture.fixture_id, fixture_idx)
     if fixture.fixture_id is not None and len(fixture.fixture_id):
         fixture_id = int(fixture.fixture_id)
     else:
@@ -366,10 +365,10 @@ def load_mvr(context, filename, mscale=mathutils.Matrix(), FIXTURES=True, TARGET
     scene_collect = context.scene.collection
     view_collect = viewlayer.layer_collection
     layer_collect = view_collect.collection
+    current_path = os.path.dirname(os.path.realpath(__file__))
+    folder_path = os.path.join(current_path, "assets", "mvr", Path(filename).stem)
     active_layer = viewlayer.active_layer_collection
     mvr_scene = pymvr.GeneralSceneDescription(filename)
-    current_path = os.path.dirname(os.path.realpath(__file__))
-    folder_path = os.path.join(current_path, "extracted_files", Path(filename).stem)
     aux_dir = scene_collect.children.get('AUXData')
     extract_mvr_textures(mvr_scene, folder_path)
     mvr_layer = mvr_scene.layers
