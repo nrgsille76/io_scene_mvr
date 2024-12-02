@@ -42,7 +42,7 @@ class FixtureMode(object):
 
 def get_folder_path():
     folder_path = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(folder_path, "fixture_profiles")
+    return os.path.join(folder_path, "assets", "gdtf")
 
 
 def cleanup_name(geometry):
@@ -321,9 +321,9 @@ def create_zoom_driver(item, target, prop):
         spec_factor.fallback_value = specular_factor
         formula = "factor / max(pow(degrees(angle), 2), 1e-09)"
         diffuse_drive.expression = f"{formula} * 0.5"
+        focus_drive.expression = f"{formula} * 0.1"
         spec_drive.expression = f"{formula} * 0.04"
         volume_drive.expression = f"{formula}"
-        focus_drive.expression = f"{formula}"
         dif_factor.data_path = vol_factor.data_path = '["Power"]'
         power_target.data_path = spec_factor.data_path = '["Power"]'
         dif_angle.data_path = vol_angle.data_path = f'["{prop}"]'
@@ -547,7 +547,7 @@ def load_blender_primitive(model):
 
 def load_gdtf_primitive(model):
     primitive = str(model.primitive_type)
-    primitive_path = os.path.join(get_folder_path(), "primitives")
+    primitive_path = get_folder_path()
     path = os.path.join(primitive_path, f"{primitive}.3ds")
     load_3ds(path, bpy.context, FILTER={'MESH'}, KEYFRAME=False, APPLY_MATRIX=False)
     obj = bpy.context.view_layer.objects.selected[0]
@@ -583,7 +583,7 @@ def create_iris_nodes(item, root, irisnode, outputnode):
     if not check_spot:
         outputnode.location = (-1440, 160)
     if not iris_gobo:
-        gobo_path = os.path.join(get_folder_path(), "primitives", "open.png")
+        gobo_path = os.path.join(get_folder_path(), "open.png")
         iris_gobo = bpy.data.images.load(gobo_path)
         iris_gobo.alpha_mode = 'CHANNEL_PACKED'
     irisnode.image = iris_gobo
@@ -612,7 +612,7 @@ def extract_gobos(profile, fid, fixturename, wheels):
     gobo_data = {}
     name = create_fixture_name(fixturename)
     gdtf_path = os.path.join(get_folder_path(), name)
-    open_path = os.path.join(get_folder_path(), "primitives", "open.png")
+    open_path = os.path.join(get_folder_path(), "open.png")
     images_path = os.path.join(gdtf_path, "wheels")
     gobos_path = os.path.join(gdtf_path, "gobos")
     open_image = Path(open_path)
@@ -1307,7 +1307,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                             obj_target.location = (obj.parent.location.x, obj.parent.location.y, 0)
                         lock_constraint.target = obj_target
         limit_constraint = obj.constraints.new('LIMIT_ROTATION')
-        range_min = math.radians(min(rangeData.get(obj.get('Original Name'))))
+        range_min = math.radians(min(rangeData.get(obj.get('Original Name'),(-270, 270))))
         if check_master:
             obj['Sub Axis'] = True
             limit_constraint.owner_space = 'LOCAL'
