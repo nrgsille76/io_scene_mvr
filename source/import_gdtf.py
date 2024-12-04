@@ -1949,7 +1949,7 @@ def load_prepare(context, filename, global_matrix, collect, align_objects, align
                   idx, gel_color, collect, None, TARGETS, BEAMS, CONES)
 
 
-def load(operator, context, files=None, directory="", filepath="", fixture_index=0, fixture_count=1,
+def load(operator, context, files=[], directory="", filepath="", fixture_index=0, fixture_count=1,
          align_axis={'X'}, align_objects=1.0, scale_objects=1.0, gel_color=[1.0, 1.0, 1.0], device_position=None,
          use_collection=False, use_targets=True, use_beams=True, use_show_cone=False, global_matrix=None):
 
@@ -1957,6 +1957,10 @@ def load(operator, context, files=None, directory="", filepath="", fixture_index
     default_layer = context.view_layer.active_layer_collection.collection
     if device_position is None:
         device_position = [0.0, 0.0, 1.0]
+
+    if not len(files):
+        files = [Path(filepath)]
+        directory = Path(filepath).parent
 
     for fl in files:
         collect = None
