@@ -547,8 +547,7 @@ def load_blender_primitive(model):
 
 def load_gdtf_primitive(model):
     primitive = str(model.primitive_type)
-    primitive_path = get_folder_path()
-    path = os.path.join(primitive_path, f"{primitive}.3ds")
+    path = os.path.join(get_folder_path(), f"{primitive}.3ds")
     load_3ds(path, bpy.context, FILTER={'MESH'}, KEYFRAME=False, APPLY_MATRIX=False)
     obj = bpy.context.view_layer.objects.selected[0]
     obj.users_collection[0].objects.unlink(obj)
