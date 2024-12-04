@@ -470,7 +470,7 @@ def load_mvr(context, filename, mscale=mathutils.Matrix(), FIXTURES=True, TARGET
     print("MVR scene loaded in %.4f sec." % (time.time() - start_time))
 
 
-def load(operator, context, files=None, directory="", filepath="", scale_objects=1.0,
+def load(operator, context, files=[], directory="", filepath="", scale_objects=1.0,
          use_collection=False, use_fixtures=True, use_targets=True, global_matrix=None):
 
     auxData.clear()
@@ -480,6 +480,10 @@ def load(operator, context, files=None, directory="", filepath="", scale_objects
     mscale = mathutils.Matrix.Scale(scale_objects, 4)
     if global_matrix is not None:
         mscale = global_matrix @ mscale
+
+    if not len(files):
+        files = [Path(filepath)]
+        directory = Path(filepath).parent
 
     default_layer = context.view_layer.active_layer_collection.collection
     for fl in files:
