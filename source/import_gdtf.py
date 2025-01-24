@@ -1381,6 +1381,7 @@ def get_tilt(model_collection, channels):
 
 def get_emit_material(obj, color, name, index, prop):
     obj.hide_select = True
+    obj.visible_shadow = False
     emit_color = obj.get('RGB')
     beamname ='ID%d_%s_%s' % (index, name, prop) if index >= 1 else '%s_%s' % (name, prop)
     if len(obj.data.materials):
@@ -1398,7 +1399,6 @@ def get_emit_material(obj, color, name, index, prop):
     obj.active_material = emit_material
     create_gdtf_props(emit_material, name)
     emit_material['Fixture ID'] = index
-    emit_material.shadow_method = 'NONE'
     emit_material['Geometry Type'] = 'Beam'
     emit_shader = PrincipledBSDFWrapper(emit_material, is_readonly=False, use_nodes=True)
     emit_shader.emission_strength = 1.0
