@@ -680,7 +680,11 @@ def load_2d(profile, name):
     obj = None
     if filename in profile._package.namelist():
         profile._package.extract(filename, folder_path)
-        bpy.ops.wm.gpencil_import_svg(filepath="", directory=folder_path, files=[{"name": filename}], scale=1)
+        filepath = os.path.join(folder_path, filename)
+        try:
+            bpy.ops.wm.gpencil_import_svg(filepath=filepath, scale=1)
+        except:
+            bpy.ops.wm.grease_pencil_import_svg(filepath=filepath, scale=1)
         if len(bpy.context.view_layer.objects.selected):
             obj = bpy.context.view_layer.objects.selected[0]
         if obj is not None:
@@ -1595,7 +1599,6 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 wheel_material['Geometry Type'] = 'Gobo'
                 wheel_material['Fixture ID'] = fixture_id
                 wheel_material['UUID'] = uid
-                wheel_material.shadow_method = 'CLIP'
                 wheel_material.blend_method = 'BLEND'
             elif obj.get('Geometry Type') == 'Beam' and obj.type == 'MESH':
                 get_emit_material(obj, gelcolor, fixture_name, fixture_id, 'Beam')
