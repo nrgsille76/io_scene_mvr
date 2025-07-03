@@ -782,7 +782,9 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
     virtual_channels = pygdtf.utils.get_virtual_channels(profile, mode)
 
     for channel in logical_channels:
-        if 'Color' in channel['ID']:
+        if 'Color1' in channel['ID']:
+            color_channels.add(channel.get('Geometry'))
+        elif 'Color' in channel['ID']:
             color_attribute = channel.get('ID')
             if color_attribute[-1] in {'R','G','B','C','M','Y'}:
                 color_channels.add(channel.get('Geometry'))
@@ -1096,13 +1098,14 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
             layerweight.location = (-1160, 440) if has_gobos else (-700, 440)
             fresnel_node.location = (-1340, 420) if has_gobos else (-900, 420)
             light_normal.location = (-1540, 400) if has_gobos else (-1100, 400)
-            links.new(layerweight.outputs[0], lightcontrast.inputs[2])
-            links.new(layerweight.outputs[1], lightcontrast.inputs[1])
             links.new(light_normal.outputs[0], fresnel_node.inputs[1])
             links.new(light_normal.outputs[1], fresnel_node.inputs[0])
+            links.new(layerweight.outputs[0], lightcontrast.inputs[2])
+            links.new(layerweight.outputs[1], lightfalloff.inputs[1])
             links.new(gamma_node.outputs[0], lightcontrast.inputs[0])
             links.new(factor_node.outputs[0], lightfalloff.inputs[0])
             links.new(fresnel_node.outputs[0], layerweight.inputs[0])
+            links.new(lightpath.outputs[9], lightcontrast.inputs[1])
             links.new(lightcontrast.outputs[0], light_mix.inputs[1])
             links.new(lightfalloff.outputs[1], light_mix.inputs[0])
             links.new(lightpath.outputs[7], lightfalloff.inputs[1])
@@ -1466,7 +1469,9 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
     virtual_channels = pygdtf.utils.get_virtual_channels(gdtf_profile, mode)
 
     for channel in channels:
-        if 'Color' in channel['ID']:
+        if 'Color1' in channel['ID']:
+            color_controller.add(channel.get('Geometry'))
+        elif 'Color' in channel['ID']:
             color_attribute = channel.get('ID')
             if color_attribute[-1] in {'R','G','B','C','M','Y'}:
                 color_controller.add(channel.get('Geometry'))
@@ -1493,7 +1498,9 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
             zoom_range = zoom_functions[0].physical_from, zoom_functions[0].physical_to
 
     for virtual in virtual_channels:
-        if 'Color' in virtual['id']:
+        if 'Color1' in virtual['id']:
+            color_controller.add(channel.get('Geometry'))
+        elif 'Color' in virtual['id']:
             color_attribute = virtual.get('id')
             if color_attribute[-1] in {'R','G','B','C','M','Y'}:
                 color_controller.add(virtual.get('Geometry'))
@@ -1667,8 +1674,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                         iris_mix.blend_type = 'DARKEN'
                         iris_mix.location = (-500, 340)
                         iris_out = iris_mix
-                    else:
-                        links.new(light_path.outputs[9], lightcontrast.inputs[1])
+                    links.new(light_path.outputs[9], lightcontrast.inputs[1])
                     create_iris_nodes(obj.data, root_object, iris_node, light_uv)
                     emit_node.location = (300, 300)
                     light_mix.location = (100, 340)
