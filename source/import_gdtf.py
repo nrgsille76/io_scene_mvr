@@ -568,6 +568,7 @@ def create_iris_nodes(item, root, irisnode, outputnode):
     center_node = iris_nodes.new('ShaderNodeVectorMath')
     cord_output = outputnode.outputs[5] if check_spot else outputnode.outputs[2]
     center_node.inputs[1].default_value[:2] = add_node.inputs[1].default_value[:2] = [0.5] * 2
+    outputnode.location = (-1720, 400) if check_spot else (-1440, 160)
     center_node.location = (-1540, 180) if check_spot else (-1240, 120)
     scale_node.location = (-1340, 150) if check_spot else (-1040, 150)
     add_node.location = (-1160, 150) if check_spot else (-840, 150)
@@ -579,8 +580,6 @@ def create_iris_nodes(item, root, irisnode, outputnode):
     center_node.operation = 'SUBTRACT'
     scale_node.operation = 'SCALE'
     add_node.operation = 'ADD'
-    if not check_spot:
-        outputnode.location = (-1440, 160)
     if not iris_gobo:
         gobo_path = os.path.join(get_folder_path(), "open.png")
         iris_gobo = bpy.data.images.load(gobo_path)
@@ -1657,17 +1656,22 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                 elif zoom_angle:
                     create_zoom_driver(obj.data, root_object, 'Focus')
                 if has_iris:
+                    obj.data.use_soft_falloff = False
                     iris_node = nodes.new('ShaderNodeTexImage')
                     iris_out = iris_node
                     if has_gobos:
                         iris_mix = nodes.new('ShaderNodeMixRGB')
+                        links.new(iris_node.outputs[0], iris_mix.inputs[2])
+                        links.new(light_path.outputs[7], iris_mix.inputs[0])
                         iris_mix.label = iris_mix.name = 'Iris Mix'
                         iris_mix.blend_type = 'DARKEN'
+                        iris_mix.location = (-500, 340)
                         iris_out = iris_mix
+                    else:
+                        links.new(light_path.outputs[9], lightcontrast.inputs[1])
                     create_iris_nodes(obj.data, root_object, iris_node, light_uv)
                     emit_node.location = (300, 300)
                     light_mix.location = (100, 340)
-                    iris_mix.location = (-500, 340)
                     color_temp.location = (-100, 200)
                     focus_node.location = (-500, 150)
                     gamma_node.location = (-300, 340)
@@ -1746,10 +1750,9 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                     if obj.parent and obj.parent.parent and obj.parent.parent.dimensions.z < 0.05:
                         obj.location[2] += -0.02
                 if has_iris:
-                    links.new(pre_node.outputs[0], iris_mix.inputs[1])
-                    links.new(iris_node.outputs[0], iris_mix.inputs[2])
-                    links.new(light_path.outputs[7], iris_mix.inputs[0])
                     links.new(iris_out.outputs[0], gamma_node.inputs[0])
+                    if has_gobos:
+                        links.new(pre_node.outputs[0], iris_mix.inputs[1])
             elif obj.type == 'MESH' and len(obj.data.materials):
                 if obj.get('Geometry Type') == 'Beam':
                     emit_color = obj.get('RGB', False)
