@@ -767,7 +767,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
     fixturetype_id = profile.fixture_type_id
     collection = bpy.data.collections.new(name)
     dmx_mode = pygdtf.utils.get_dmx_mode_by_name(profile, mode)
-    has_gobos = zoom_range = False
+    has_gobos = has_iris = zoom_range = False
 
     if dmx_mode is None:
         dmx_mode = profile.dmx_modes[0]
@@ -790,6 +790,8 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                 color_channels.add(channel.get('Geometry'))
         if 'Gobo' in channel['ID']:
             has_gobos = True
+        if 'Iris' in channel['ID']:
+            has_iris = True
         if 'Zoom' in channel['ID']:
             zoom_function = channel.get('Functions')
             zoom_range = zoom_function[0].physical_from, zoom_function[0].physical_to
@@ -1085,7 +1087,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
             factor_node.location = (-700, 150)
             lightfalloff.location = (-500, 220)
             lightcontrast.location = (-300, 360)
-            if has_gobos:
+            if has_gobos or has_iris:
                 light_data.shadow_soft_size = geometry.beam_radius * 0.2
                 create_gobo(geometry, goboGeometry)
             color_temp.inputs[0].default_value = ctc
@@ -1275,7 +1277,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         check_parent = obj.parent and obj.parent.get('Mobile Axis') in {'Pan', 'Tilt'}
         check_master = check_parent and obj.parent.parent and obj.parent.parent.get('Mobile Axis') in {'Pan', 'Tilt'}
         if TARGETS:
-            if not len(base.constraints) and (check_pan and not len(obj.children) or (not check_pan and not check_tilt)):
+            if not len(base.constraints) and (check_pan and not len(obj.children) or (not check_pan and not heads)):
                 track_constraint = base.constraints.new('TRACK_TO')
                 track_constraint.target = main_target
                 continue
@@ -1541,6 +1543,9 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
         gobo_count = start_gobo.get('Count')
         wheel_name = 'Gobo 1' if check_wheels else 'Gobo'
         random_gobo = random.randint(0, gobo_count)
+    elif has_iris:
+        check_wheels = False
+        wheel_name = 'Iris'
 
     if model_collection:
         root_object = None
@@ -1674,6 +1679,8 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                         iris_mix.blend_type = 'DARKEN'
                         iris_mix.location = (-500, 340)
                         iris_out = iris_mix
+                    else:
+                        obj.location[2] += 0.01
                     links.new(light_path.outputs[9], lightcontrast.inputs[1])
                     create_iris_nodes(obj.data, root_object, iris_node, light_uv)
                     emit_node.location = (300, 300)
@@ -1795,25 +1802,27 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                         principled_bsdf = gobo_nodes.get('Principled BSDF')
                         gobo_nodes.remove(principled_bsdf)
                         gobo_cord = gobo_nodes.new('ShaderNodeTexCoord')
-                        wheel_node = gobo_nodes.new('ShaderNodeTexImage')
-                        wheel_rota = gobo_nodes.new('ShaderNodeVectorRotate')
-                        opacity_node = gobo_nodes.new('ShaderNodeBsdfTransparent')
-                        wheel_rota.label = wheel_rota.name = '%s Rotate' % wheel_name
-                        opacity_node.label = opacity_node.name = 'Wheel Shader'
                         gobo_cord.label = gobo_cord.name = 'Gobo Coordinate'
-                        wheel_node.color_mapping.blend_type = 'LINEAR_LIGHT'
-                        wheel_node.label = wheel_node.name = wheel_name
-                        wheel_node.extension = 'EXTEND'
-                        wheel_node.image = start_gobo
-                        previous_node = wheel_node
+                        opacity_node = gobo_nodes.new('ShaderNodeBsdfTransparent')
+                        opacity_node.label = opacity_node.name = 'Wheel Shader'
+                        previous_node = None
+                        if has_gobos:
+                            wheel_node = gobo_nodes.new('ShaderNodeTexImage')
+                            wheel_rota = gobo_nodes.new('ShaderNodeVectorRotate')
+                            wheel_rota.label = wheel_rota.name = '%s Rotate' % wheel_name
+                            wheel_node.color_mapping.blend_type = 'LINEAR_LIGHT'
+                            wheel_node.label = wheel_node.name = wheel_name
+                            wheel_node.location = (-620, 460)
+                            wheel_rota.location = (-840, 310)
+                            wheel_node.extension = 'EXTEND'
+                            wheel_node.image = start_gobo
+                            gobo_links.new(gobo_cord.outputs[0], wheel_rota.inputs[0])
+                            gobo_links.new(wheel_rota.outputs[0], wheel_node.inputs[0])
+                            gobo_links.new(wheel_node.outputs[0], opacity_node.inputs[0])
+                            create_gobo_driver(wheel_node, wheel_rota, root_object, gobo_count)
+                            previous_node = wheel_node
                         gobo_cord.location = (-1040, 90)
-                        wheel_node.location = (-620, 460)
-                        wheel_rota.location = (-840, 310)
                         opacity_node.location = (100, 300)
-                        create_gobo_driver(wheel_node, wheel_rota, root_object, gobo_count)
-                        gobo_links.new(gobo_cord.outputs[0], wheel_rota.inputs[0])
-                        gobo_links.new(wheel_rota.outputs[0], wheel_node.inputs[0])
-                        gobo_links.new(wheel_node.outputs[0], opacity_node.inputs[0])
                         gobo_links.new(opacity_node.outputs[0], material_node.inputs[0])
                         if check_wheels:
                             for idx, wheel in enumerate(list(gobo_data.keys())[1:], 2):
@@ -1860,10 +1869,6 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                         if has_iris:
                             light_fall = gobo_nodes.get('Light Falloff', False)
                             iris_node = gobo_nodes.new('ShaderNodeTexImage')
-                            iris_mix = gobo_nodes.new('ShaderNodeMixRGB')
-                            iris_mix.label = iris_mix.name = 'Iris Mix'
-                            iris_mix.blend_type = 'MULTIPLY'
-                            iris_mix.location = (-100 + max(wheel_count - 2, 0) * 200, 340)
                             if not light_fall:
                                 light_path = gobo_nodes.new('ShaderNodeLightPath')
                                 light_fall = gobo_nodes.new('ShaderNodeLightFalloff')
@@ -1871,16 +1876,23 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                                 light_path.location = (-1040, 460)
                                 gobo_links.new(light_path.outputs[1], light_fall.inputs[0])
                                 gobo_links.new(light_path.outputs[8], light_fall.inputs[1])
+                            if previous_node is not None:
+                                iris_mix = gobo_nodes.new('ShaderNodeMixRGB')
+                                iris_mix.label = iris_mix.name = 'Iris Mix'
+                                iris_mix.blend_type = 'MULTIPLY'
+                                iris_mix.location = (-100 + max(wheel_count - 2, 0) * 200, 340)
+                                gobo_links.new(iris_node.outputs[0], iris_mix.inputs[2])
+                                gobo_links.new(previous_node.outputs[0], iris_mix.inputs[1])
+                                gobo_links.new(light_fall.outputs[0], iris_mix.inputs[0])
+                            else:
+                                iris_mix = iris_node
                             create_iris_nodes(gobo_material, root_object, iris_node, gobo_cord)
                             if check_wheels:
                                 iris_mix.location = (-100 + max(wheel_count - 2, 0) * 200, 340)
                                 iris_node.location = (-300 + max(wheel_count - 2, 0) * 200, 150)
                                 opacity_node.location = (100 + max(wheel_count - 2, 0) * 200, 320)
                                 material_node.location = (300 + max(wheel_count - 2, 0) * 200, 300)
-                            gobo_links.new(iris_node.outputs[0], iris_mix.inputs[2])
-                            gobo_links.new(previous_node.outputs[0], iris_mix.inputs[1])
                             gobo_links.new(iris_mix.outputs[0], opacity_node.inputs[0])
-                            gobo_links.new(light_fall.outputs[0], iris_mix.inputs[0])
                 else:
                     for mtl in obj.data.materials:
                         obj_name = obj.get('Fixture Name', obj.name)
@@ -1892,6 +1904,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fixtur
                     if len(parents.children) > 1:
                         for idx, childs in enumerate(parents.children, 1):
                             if len(childs.children) > 1:
+                                parents.visible_shadow = False
                                 for i, child in enumerate(childs.children, 1):
                                     child_name = child.name.split('.')[0]
                                     child.name = '%s %d' % (child_name, i)
