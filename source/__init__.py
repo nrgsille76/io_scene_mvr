@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 __author__ = "Sebastian Sille <nrgsille@gmail.com>"
-__version__ = "1.1.7"
+__version__ = "1.1.8"
 __date__ = "2 Aug 2024"
 
 
