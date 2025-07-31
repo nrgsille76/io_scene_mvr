@@ -12,6 +12,7 @@ from bpy_extras.io_utils import (
     ImportHelper,
     orientation_helper,
     axis_conversion,
+    poll_file_object_drop,
 )
 from bpy.props import (
     IntProperty,
@@ -23,10 +24,11 @@ from bpy.props import (
     FloatVectorProperty,
 )
 
+'''
 bl_info = {
     "name": "Import MVR & GDTF",
     "author": "Sebastian Sille",
-    "version": (1, 1, 4),
+    "version": (1, 1, 5),
     "blender": (4, 0, 0),
     "location": "File > Import",
     "description": "Import My Virtual Rig and General Device Type Format",
@@ -34,6 +36,7 @@ bl_info = {
     "filepath_url": "",
     "category": "Import-Export",
 }
+'''
 
 if "bpy" in locals():
     import importlib
@@ -91,8 +94,10 @@ class ImportMVR(bpy.types.Operator, ImportHelper):
         keywords = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob"))
         global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up,).to_4x4()
         keywords["global_matrix"] = global_matrix
-
         return import_mvr.load(self, context, **keywords)
+
+    def invoke(self, context, event):
+        return self.invoke_popup(context)
 
 
 def import_mvr_include(layout, operator):
@@ -121,7 +126,7 @@ def import_mvr_transform(layout, operator):
 
 
 class IO_FH_mvr(bpy.types.FileHandler):
-    bl_idname = "IO_FH_mvr"
+    bl_idname = "IO_FH_MVR"
     bl_label = "MVR"
     bl_import_operator = "import_scene.mvr"
     #bl_export_operator = "export_scene.mvr"
@@ -156,6 +161,13 @@ class ImportGDTF(bpy.types.Operator, ImportHelper):
         description="Fixture count",
         min=0, max=10000,
         soft_min=0, soft_max=10000,
+        default=1,
+    )
+    fixture_mode: IntProperty(
+        name="Mode",
+        description="Fixture mode",
+        min=1, max=1024,
+        soft_min=1, soft_max=512,
         default=1,
     )
     gel_color: FloatVectorProperty(
@@ -235,8 +247,10 @@ class ImportGDTF(bpy.types.Operator, ImportHelper):
         device_position = self.fixture_position if any(self.fixture_position) else None
         keywords["device_position"] = device_position
         keywords["global_matrix"] = global_matrix
-
         return import_gdtf.load(self, context, **keywords)
+
+    def invoke(self, context, event):
+        return self.invoke_popup(context)
 
 
 def import_gdtf_include(layout, operator):
@@ -248,6 +262,7 @@ def import_gdtf_include(layout, operator):
         layrow.label(text="", icon='OUTLINER_COLLECTION' if operator.use_collection else 'GROUP')
         layout.prop(operator, "fixture_index")
         layout.prop(operator, "fixture_count")
+        layout.prop(operator, "fixture_mode")
         layout.prop(operator, "gel_color")
         layrow = layout.row(align=True)
         layrow.prop(operator, "use_beams")
@@ -274,7 +289,7 @@ def import_gdtf_transform(layout, operator):
 
 
 class IO_FH_gdtf(bpy.types.FileHandler):
-    bl_idname = "IO_FH_gdtf"
+    bl_idname = "IO_FH_GDTF"
     bl_label = "GDTF"
     bl_import_operator = "import_scene.gdtf"
     bl_file_extensions = ".gdtf"
