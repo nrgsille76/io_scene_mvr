@@ -762,7 +762,7 @@ def load_model(profile, name, model):
     return obj
 
 
-def build_collection(profile, name, fixture_id, uid, mode, mode_nr, BEAMS, TARGETS, CONES):
+def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES, MODE_NR):
     """Create model collection."""
 
     objectDict = {}
@@ -773,7 +773,10 @@ def build_collection(profile, name, fixture_id, uid, mode, mode_nr, BEAMS, TARGE
     has_gobos = has_iris = zoom_range = False
 
     if dmx_mode is None:
-        dmx_mode = profile.dmx_modes[min(mode_nr, len(profile.dmx_modes)) - 1]
+        if MODE_NR == 0:
+            dmx_mode = profile.dmx_modes[MODE_NR]
+        else:
+            dmx_mode = profile.dmx_modes[min(MODE_NR, len(profile.dmx_modes)) - 1]
         mode = dmx_mode.name
 
     collection['Fixture ID'] = fixture_id
@@ -1358,7 +1361,7 @@ def build_collection(profile, name, fixture_id, uid, mode, mode_nr, BEAMS, TARGE
     return collection
 
 
-def get_fixture_models(profile, name, fixture_id, uid, dmx_mode, mode_nr, BEAMS, TARGETS, CONES):
+def get_fixture_models(profile, name, fixture_id, uid, dmx_mode, BEAMS, TARGETS, CONES, MODE_NR):
     collections = bpy.data.collections
 
     if profile == None:
@@ -1369,7 +1372,7 @@ def get_fixture_models(profile, name, fixture_id, uid, dmx_mode, mode_nr, BEAMS,
         print("Getting collection from cache: %s" % name)
         return new_collection
     else:
-        new_collection = build_collection(profile, name, fixture_id, uid, dmx_mode, mode_nr, BEAMS, TARGETS, CONES)
+        new_collection = build_collection(profile, name, fixture_id, uid, dmx_mode, BEAMS, TARGETS, CONES, MODE_NR)
         return new_collection
 
 
@@ -1417,8 +1420,8 @@ def get_emit_material(obj, color, name, index, prop):
 
 
 
-def fixture_build(context, filename, mscale, name, position, focus_point, fix_id, mode_nr,
-                  gelcolor, collect, fixture, TARGETS=True, BEAMS=True, CONES=False):
+def fixture_build(context, filename, mscale, name, position, focus_point, fix_id, gelcolor,
+                  collect, fixture, TARGETS=True, BEAMS=True, CONES=False, MODE_NR=0):
 
     viewlayer = context.view_layer
     object_data = bpy.data.objects
@@ -1460,7 +1463,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fix_id
         data_collect.remove(index_collection)
 
     # Import Fixture Model Collection
-    model_collection = get_fixture_models(gdtf_profile, fixture_name, fix_id, uid, mode, mode_nr, BEAMS, TARGETS, CONES)
+    model_collection = get_fixture_models(gdtf_profile, fixture_name, fix_id, uid, mode, BEAMS, TARGETS, CONES, MODE_NR)
     if model_collection:
         model_collection.name = index_name(fixture_name)
         if collect and model_collection.name not in collect.children:
@@ -1468,7 +1471,10 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fix_id
 
     # Build DMX channels cache
     if not any(mode == md.name for md in gdtf_profile.dmx_modes):
-        mode = gdtf_profile.dmx_modes[min(mode_nr, len(gdtf_profile.dmx_modes)) - 1].name
+        if MODE_NR == 0:
+            mode = gdtf_profile.dmx_modes[MODE_NR].name
+        else:
+            mode = gdtf_profile.dmx_modes[min(MODE_NR, len(gdtf_profile.dmx_modes)) - 1].name
     dmx_channels = collect_dmx_channels(gdtf_profile, mode)
     channels += [channel for break_channels in dmx_channels for channel in break_channels]
     virtual_channels = pygdtf.utils.get_virtual_channels(gdtf_profile, mode)
@@ -1935,8 +1941,8 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fix_id
     linkDict.clear()
 
 
-def load_gdtf(context, filename, mscale, name, position, focus_point, fix_id, fix_mode,
-              gelcolor, collect, fixture, TARGETS=True, BEAMS=True, CONES=False):
+def load_gdtf(context, filename, mscale, name, position, focus_point, fix_id, gelcolor,
+              collect, fixture, TARGETS=True, BEAMS=True, CONES=False, MODE_NR=0):
 
     rangeData.clear()
     targetData.clear()
@@ -1944,7 +1950,7 @@ def load_gdtf(context, filename, mscale, name, position, focus_point, fix_id, fi
 
     context.scene.cycles.preview_pause = True
     fixture_build(context, filename, mscale, name, position, focus_point, fix_id,
-                  fix_mode, gelcolor, collect, fixture, TARGETS, BEAMS, CONES)
+                  gelcolor, collect, fixture, TARGETS, BEAMS, CONES, MODE_NR)
 
     rangeData.clear()
     targetData.clear()
@@ -1953,7 +1959,7 @@ def load_gdtf(context, filename, mscale, name, position, focus_point, fix_id, fi
 
 
 def load_prepare(context, filename, global_matrix, collect, align_objects, align_axis, scale_objects,
-                 fix_index, fix_count, fix_mode, gel_color, device_position, TARGETS, BEAMS, CONES):
+                 fix_index, fix_count, gel_color, device_position, TARGETS, BEAMS, CONES, MODE_NR):
 
     name = Path(filename).stem
     mscale = mathutils.Matrix.Scale(scale_objects, 4)
@@ -1973,7 +1979,7 @@ def load_prepare(context, filename, global_matrix, collect, align_objects, align
         position = mathutils.Matrix.Translation(spread)
         focus_point = mathutils.Matrix.Translation((spread[0], spread[1], 0))
         load_gdtf(context, filename, mscale, name, position, focus_point, idx,
-                  fix_mode, gel_color, collect, None, TARGETS, BEAMS, CONES)
+                  gel_color, collect, None, TARGETS, BEAMS, CONES, MODE_NR)
 
 
 def load(operator, context, files=[], directory="", filepath="", fixture_index=0, fixture_count=1, fixture_mode=1,
@@ -1996,8 +2002,8 @@ def load(operator, context, files=[], directory="", filepath="", fixture_index=0
             context.scene.collection.children.link(collect)
             context.view_layer.active_layer_collection = context.view_layer.layer_collection.children[collect.name]
         load_prepare(context, os.path.join(directory, fl.name), global_matrix, collect, align_objects,
-                     align_axis, scale_objects, fixture_index, fixture_count, fixture_mode, gel_color,
-                     device_position, TARGETS=use_targets, BEAMS=use_beams, CONES=use_show_cone)
+                     align_axis, scale_objects, fixture_index, fixture_count, gel_color, device_position,
+                     TARGETS=use_targets, BEAMS=use_beams, CONES=use_show_cone, MODE_NR=fixture_mode)
 
     active = context.view_layer.layer_collection.children.get(default_layer.name)
     if active is not None:
