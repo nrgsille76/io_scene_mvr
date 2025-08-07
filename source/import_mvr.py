@@ -357,6 +357,7 @@ def transform_objects(layers, mscale):
                    
 def load_mvr(context, filename, mscale=mathutils.Matrix(), FIXTURES=True, TARGETS=True):
 
+    symdefs = []
     extracted = {}
     imported_layers = []
     start_time = time.time()
@@ -365,16 +366,18 @@ def load_mvr(context, filename, mscale=mathutils.Matrix(), FIXTURES=True, TARGET
     scene_collect = context.scene.collection
     view_collect = viewlayer.layer_collection
     layer_collect = view_collect.collection
+    active_layer = viewlayer.active_layer_collection
+    aux_dir = scene_collect.children.get('AUXData')
+    mvr_scene = pymvr.GeneralSceneDescription(filename)
     current_path = os.path.dirname(os.path.realpath(__file__))
     folder_path = os.path.join(current_path, "assets", "mvr", Path(filename).stem)
-    active_layer = viewlayer.active_layer_collection
-    mvr_scene = pymvr.GeneralSceneDescription(filename)
-    aux_dir = scene_collect.children.get('AUXData')
+    mvr_layers = mvr_scene.layers if hasattr(mvr_scene, "layers") else []
     extract_mvr_textures(mvr_scene, folder_path)
-    mvr_layer = mvr_scene.layers
-    auxdata = mvr_scene.aux_data
-    classes = auxdata.classes
-    symdefs = auxdata.symdefs
+
+    if hasattr(mvr_scene, "aux_data"):
+        auxdata = mvr_scene.aux_data
+        classes = auxdata.classes
+        symdefs = auxdata.symdefs
 
     for ob in viewlayer.objects.selected:
         ob.select_set(False)
@@ -395,7 +398,7 @@ def load_mvr(context, filename, mscale=mathutils.Matrix(), FIXTURES=True, TARGET
             get_child_list(context, mscale, mvr_scene, symdef.child_list, aux_idx,
                            folder_path, extracted, aux_collection, FIXTURES, TARGETS)
 
-    for layer_idx, layer in enumerate(mvr_scene.layers):
+    for layer_idx, layer in enumerate(mvr_layers):
         layer_class = layer.__class__.__name__
         layer_collection = next((col for col in data_collect if col.get('UUID') == layer.uuid), False)
         if not layer_collection:
@@ -411,7 +414,7 @@ def load_mvr(context, filename, mscale=mathutils.Matrix(), FIXTURES=True, TARGET
         if len(layer_collection.all_objects) == 0 and layer_collection.name in layer_collect.children:
             layer_collect.children.unlink(layer_collection)
 
-    transform_objects(mvr_scene.layers, mscale)
+    transform_objects(mvr_layers, mscale)
 
     if auxData.items():
         aux_type = auxdata.__class__.__name__
@@ -458,11 +461,12 @@ def load_mvr(context, filename, mscale=mathutils.Matrix(), FIXTURES=True, TARGET
             elif obj.name[-3:].isdigit() and obj.name[-4] == '.':
                 obj.name = '%s %d' % (obj_name, obid)
 
-    for view in view_collect.children:
-        if view.name == 'AUXData':
-            for childs in view.children:
-                for collect in childs.children:
-                    collect.hide_viewport = True
+    if mvr_layers:
+        for view in view_collect.children:
+            if view.name == 'AUXData':
+                for childs in view.children:
+                    for collect in childs.children:
+                        collect.hide_viewport = True
 
     viewlayer.update()
     imported_layers.clear()
