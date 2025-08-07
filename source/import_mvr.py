@@ -376,8 +376,8 @@ def load_mvr(context, filename, mscale=mathutils.Matrix(), FIXTURES=True, TARGET
 
     if hasattr(mvr_scene, "aux_data"):
         auxdata = mvr_scene.aux_data
-        classes = auxdata.classes
-        symdefs = auxdata.symdefs
+        classes = auxdata.classes if hasattr(auxdata, "classes") else []
+        symdefs = auxdata.symdefs if hasattr(auxdata, "symdefs") else []
 
     for ob in viewlayer.objects.selected:
         ob.select_set(False)
