@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 __author__ = "Sebastian Sille <nrgsille@gmail.com>"
-__version__ = "1.2.3"
+__version__ = "1.2.4"
 __date__ = "2 Aug 2024"
 
 
@@ -28,7 +28,7 @@ from bpy.props import (
 bl_info = {
     "name": "Import MVR & GDTF",
     "author": "Sebastian Sille",
-    "version": (1, 2, 3),
+    "version": (1, 2, 4),
     "blender": (4, 0, 0),
     "location": "File > Import",
     "description": "Import My Virtual Rig and General Device Type Format",
@@ -92,7 +92,7 @@ class ImportMVR(bpy.types.Operator, ImportHelper):
     def execute(self, context):
         from . import import_mvr
         keywords = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob"))
-        global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up,).to_4x4()
+        global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4()
         keywords["global_matrix"] = global_matrix
         return import_mvr.load(self, context, **keywords)
 
