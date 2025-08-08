@@ -1516,7 +1516,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fix_id
             if color_attribute[-1] in {'R','G','B','C','M','Y'}:
                 color_controller.add(virtual.get('Geometry'))
         if 'Gobo' in virtual['id']:
-            gobo_functions = virtual.get('Functions')
+            gobo_functions = virtual.get('channel_functions')
             for function in gobo_functions:
                 wheel_function = str(function.wheel)
                 if wheel_function != 'None' and wheel_function not in wheels:
@@ -1528,13 +1528,13 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fix_id
         if 'Iris' in virtual['id']:
             has_iris = True
         if 'Pan' in virtual['id']:
-            pan_functions = virtual.get('functions')
+            pan_functions = virtual.get('channel_functions')
             pan_range = pan_functions[0].physical_from, pan_functions[0].physical_to
         if 'Tilt' in virtual['id']:
-            tilt_functions = virtual.get('functions')
+            tilt_functions = virtual.get('channel_functions')
             tilt_range = tilt_functions[0].physical_from, tilt_functions[0].physical_to
         if 'Zoom' in virtual['id']:
-            zoom_functions = virtual.get('functions')
+            zoom_functions = virtual.get('channel_functions')
             zoom_range = zoom_functions[0].physical_from, zoom_functions[0].physical_to
 
     linkDict = {}
