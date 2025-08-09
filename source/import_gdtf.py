@@ -13,9 +13,9 @@ import bpy
 import copy
 import math
 import random
-import pygdtf
 import mathutils
 import uuid as pyuid
+import py_gdtf as pygdtf
 from types import SimpleNamespace
 from io_scene_3ds.import_3ds import load_3ds
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
