@@ -10,9 +10,9 @@
 import os
 import bpy
 import time
-import pymvr
 import random
 import mathutils
+import py_mvr as pymvr
 from pathlib import Path
 from io_scene_3ds.import_3ds import load_3ds
 from .import_gdtf import fixture_build, load_gdtf
