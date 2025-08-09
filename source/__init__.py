@@ -41,7 +41,7 @@ bl_info = {
 if "bpy" in locals():
     import importlib
     if "ImportMVR" in locals():
-        importlib.reload(import_max)
+        importlib.reload(import_mvr)
     if "ImportGDTF" in locals():
         importlib.reload(import_gdtf)
 
