@@ -19,22 +19,11 @@ from bpy_extras import node_shader_utils
 from io_scene_3ds.export_3ds import save_3ds
 
 
-def get_fixture(specs, assets):
-    file_path = None
-
-    for root, dirs, files in os.walk(assets):
-        if specs in files:
-            file_path = os.path.join(root, specs)
-    focus_point = pymvr.FocusPoint().to_xml()
-
-    return file_path
-
-
 def get_material_images(material, path):
     images = []
     mtype = 'MIX', 'MIX_RGB'
     links = material.node_tree.links
-    mtex = [lk.from_node for lk in links if lk.from_node.type == 'TEX_IMAGE' and lk.to_socket.identifier in {'Color2', 'B_Color'}]
+    mtex = [lk.from_node for lk in links if lk.from_node.type == 'TEX_IMAGE' and lk.to_node.type in mtype]
     bsdf = node_shader_utils.PrincipledBSDFWrapper(material)
 
     def get_image(image):
@@ -48,7 +37,8 @@ def get_material_images(material, path):
     if bsdf.base_color_texture:
         get_image(bsdf.base_color_texture.image)
     if mtex:
-        get_image(mtex[0].image)
+        for tex in mtex:
+            get_image(tex.image)
     if bsdf.specular_tint_texture:
         get_image(bsdf.specular_tint_texture.image)
     if bsdf.alpha_texture:
@@ -70,6 +60,32 @@ def get_trans_matrix(mtx, obj=None):
     rotate = mtx.transposed().to_3x3()
     trans_mtx = Matrix(list((rotate[0][:], rotate[1][:], rotate[2][:], translate[:])))
     return trans_mtx
+
+
+def get_fixture(fixture, specs, assets, matrix):
+    uid = fixture.get("UUID")
+    file_path = focus_point = None
+    fix_name = fixture.get("Fixture Name")
+    specs = '@'.join((child.get("Company"), fix_name))
+    base = next((ob for ob in fixture.objects if ob.get("Use Root")), fixture.objects[0])
+    target = next((ob for ob in fixture.objects if ob.get("Geometry Type") == "Target"), None)
+    fix_id = fixture.get("Fixture ID")
+    fix_mode = base.get("Fixture Mode")
+    transmtx = get_trans_matrix(matrix, base)
+    fix_object = pymvr.Fixture(name=fix_name, uuid=uid, gdtf_spec=specs, gdtf_mode=fix_mode,
+                               matrix=transmtx, fixture_id=str(fix_id), fixture_id_numeric=fix_id).to_xml()
+
+    for root, dirs, files in os.walk(assets):
+        if specs in files:
+            file_path = os.path.join(root, specs)
+
+    if target:
+        target_uid = target.get("UUID")
+        target_name = target.get("Fixture Name")
+        target_mtx = get_trans_matrix(matrix, target)
+        focus_point = pymvr.FocusPoint(uuid=target_uid, name=target_name, matrix=target_mtx).to_xml()
+
+    return fix_object, file_path, focus_point
 
 
 def export_3ds(context, path, objects, selection, matrix, collection=None):
@@ -137,45 +153,44 @@ def save_mvr(operator, context, items, filename, selection=False, matrix=mathuti
             elif any(ob.type == 'MESH' for ob in item.objects):
                 layer = pymvr.Layer(name=item.name).to_xml(parent=layers)
                 child_list = pymvr.ChildList().to_xml(parent=layer)
+                transmtx = get_trans_matrix(matrix)
+                scene_object = pymvr.SceneObject(name=item.name, matrix=transmtx).to_xml()
+                geometries = pymvr.Geometries().to_xml(parent=scene_object)
+                geo_list = pymvr.ChildList().to_xml(parent=geometries)
+                geo_name = '.'.join((item.name, "3ds"))
+                file_path = os.path.join(folder_path, geo_name)
+                export_3ds(context, file_path, item.all_objects, selection, matrix, item.name)
+                mvr_object = pymvr.Geometry3D(file_name=geo_name).to_xml()
+                geo_list.append(mvr_object)
+                objects_list.append((file_path, geo_name))
+
                 for ob in item.objects:
-                    if ob.type == 'MESH':
-                        transmtx = get_trans_matrix(matrix, ob)
-                        scene_object = pymvr.SceneObject(name=ob.name, matrix=transmtx).to_xml()
-                        geometries = pymvr.Geometries().to_xml(parent=scene_object)
-                        geo_list = pymvr.ChildList().to_xml(parent=geometries)
-                        objects_list, mvr_object = export_mvr(context, ob, objects_list, assets_path, folder_path, selection, matrix)
-                        if mvr_object is not None:
-                            geo_list.append(mvr_object)
-                        child_list.append(scene_object)
+                    objects_list.extend(get_material_images(ob.active_material, folder_path))
+                child_list.append(scene_object)
 
             for child in item.children:
                 if any(ob.type == 'MESH' for ob in child.objects):
                     is_fixture = child.get("Company")
                     if is_fixture:
-                        uid = child.get("UUID")
-                        fix_name = child.get("Fixture Name")
-                        specs = '@'.join((child.get("Company"), fix_name))
-                        base = next((ob for ob in child.objects if ob.get("Use Root")), None)
-                        fix_id = child.get("Fixture ID")
-                        fix_mode = base.get("Fixture Mode")
-                        transmtx = get_trans_matrix(matrix, base)
-                        fix_object = pymvr.Fixture(name=fix_name, uuid=uid, gdtf_spec=specs, gdtf_mode=fix_mode,
-                                                   matrix=transmtx, fixture_id=str(fix_id), fixture_id_numeric=fix_id).to_xml()
-                        file_path = get_fixture(specs, assets_path)
+                        fix_object, file_path, focuspoint = get_fixture(child, assets_path, matrix)
                         if file_path:
                             objects_list.append((file_path, Path(file_path).name))
                         child_list.append(fix_object)
+                        if focuspoint:
+                            child_list.append(focuspoint)
                     else:
                         if child.get("MVR Class") == "SceneObject":
                             uid = child.get("UUID")
                             trs = child.objects[0].get("Transform")
                             transmtx = Matrix(list((trs[:3], trs[3:6], trs[6:9], trs[9:])))
                             scene_object = pymvr.SceneObject(name=child.name, uuid=uid, matrix=transmtx).to_xml()
+                            geometries = pymvr.Geometries().to_xml(parent=scene_object)
+                            geo_list = pymvr.ChildList().to_xml(parent=geometries)
                         else:
                             transmtx = get_trans_matrix(matrix)
                             scene_object = pymvr.SceneObject(name=child.name, matrix=transmtx).to_xml()
-                        geometries = pymvr.Geometries().to_xml(parent=scene_object)
-                        geo_list = pymvr.ChildList().to_xml(parent=geometries)
+                            geometries = pymvr.Geometries().to_xml(parent=scene_object)
+                            geo_list = pymvr.ChildList().to_xml(parent=geometries)
 
                         for ob in child.objects:
                             objects_list, mvr_object = export_mvr(context, ob, objects_list, assets_path, folder_path, selection, matrix)
