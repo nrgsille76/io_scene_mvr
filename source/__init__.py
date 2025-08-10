@@ -10,6 +10,7 @@ __date__ = "2 Aug 2024"
 import bpy
 from bpy_extras.io_utils import (
     ImportHelper,
+    ExportHelper,
     orientation_helper,
     axis_conversion,
     poll_file_object_drop,
@@ -23,12 +24,15 @@ from bpy.props import (
     CollectionProperty,
     FloatVectorProperty,
 )
+from . import export_mvr
+from . import import_mvr
+from . import import_gdtf
 
 '''
 bl_info = {
     "name": "Import MVR & GDTF",
     "author": "Sebastian Sille",
-    "version": (1, 2, 4),
+    "version": (1, 2, 5),
     "blender": (4, 0, 0),
     "location": "File > Import",
     "description": "Import My Virtual Rig and General Device Type Format",
@@ -40,6 +44,8 @@ bl_info = {
 
 if "bpy" in locals():
     import importlib
+    if "ExportMVR" in locals():
+        importlib.reload(export_mvr)
     if "ImportMVR" in locals():
         importlib.reload(import_mvr)
     if "ImportGDTF" in locals():
@@ -90,7 +96,6 @@ class ImportMVR(bpy.types.Operator, ImportHelper):
         import_mvr_transform(layout, self)
 
     def execute(self, context):
-        from . import import_mvr
         keywords = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob"))
         global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4()
         keywords["global_matrix"] = global_matrix
@@ -125,11 +130,77 @@ def import_mvr_transform(layout, operator):
         layout.prop(operator, "axis_up")
 
 
+@orientation_helper(axis_forward='Y', axis_up='Z')
+class ExportMVR(bpy.types.Operator, ExportHelper):
+    """Export My Virtual Rig"""
+
+    bl_idname = "export_scene.mvr"
+    bl_label = "Export MVR (.mvr)"
+    bl_options = {"PRESET", "UNDO"}
+
+    filename_ext = ".mvr"
+    filter_glob: StringProperty(default="*.mvr", options={'HIDDEN'})
+
+    collection: StringProperty(
+        name="Source Collection",
+        description="Export objects from this collection",
+        default="",
+    )
+    use_selection: BoolProperty(
+        name="Selection",
+        description="Export selected objects only",
+        default=False,
+    )
+    use_collection: BoolProperty(
+        name="Collection",
+        description="Export active collection only",
+        default=False,
+    )
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        browser = context.space_data.type == 'FILE_BROWSER'
+
+        export_mvr_include(layout, self, browser)
+        export_mvr_transform(layout, self)
+
+    def execute(self, context):
+        keywords = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob", "check_existing"))
+        global_matrix = axis_conversion(to_forward=self.axis_forward, to_up=self.axis_up).to_4x4()
+        keywords["global_matrix"] = global_matrix
+
+        return export_mvr.save(self, context, **keywords)
+
+
+def export_mvr_include(layout, operator, browser):
+    header, body = layout.panel("MVR_export_include", default_closed=False)
+    header.label(text="Include")
+    if body:
+        if browser:
+            line = body.row(align=True)
+            line.prop(operator, "use_selection")
+            line.label(text="", icon='RESTRICT_SELECT_OFF' if operator.use_selection else 'RESTRICT_SELECT_ON')
+            line = body.row(align=True)
+            line.prop(operator, "use_collection")
+            line.label(text="", icon='OUTLINER_COLLECTION' if operator.use_collection else 'GROUP')
+
+
+def export_mvr_transform(layout, operator):
+    header, body = layout.panel("MVR_export_transform", default_closed=False)
+    header.label(text="Transform")
+    if body:
+        body.prop(operator, "axis_forward")
+        body.prop(operator, "axis_up")
+
+
 class IO_FH_mvr(bpy.types.FileHandler):
     bl_idname = "IO_FH_MVR"
     bl_label = "MVR"
     bl_import_operator = "import_scene.mvr"
-    #bl_export_operator = "export_scene.mvr"
+    bl_export_operator = "export_scene.mvr"
     bl_file_extensions = ".mvr"
 
     @classmethod
@@ -241,7 +312,6 @@ class ImportGDTF(bpy.types.Operator, ImportHelper):
         import_gdtf_transform(layout, self)
 
     def execute(self, context):
-        from . import import_gdtf
         keywords = self.as_keywords(ignore=("fixture_position", "axis_forward", "axis_up", "filter_glob"))
         global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up,).to_4x4()
         device_position = self.fixture_position if any(self.fixture_position) else None
@@ -299,23 +369,31 @@ class IO_FH_gdtf(bpy.types.FileHandler):
         return poll_file_object_drop(context)
 
 
-def menu_func(self, context):
+def menu_func_import(self, context):
     self.layout.operator(ImportMVR.bl_idname, text="My Virtual Rig (.mvr)")
     self.layout.operator(ImportGDTF.bl_idname, text="General Device Type Format (.gdtf)")
 
 
+def menu_func_export(self, context):
+    self.layout.operator(ExportMVR.bl_idname, text="My Virtual Rig (.mvr)")
+
+
 def register():
-    bpy.utils.register_class(ImportMVR)
     bpy.utils.register_class(ImportGDTF)
+    bpy.utils.register_class(ImportMVR)
+    bpy.utils.register_class(ExportMVR)
     bpy.utils.register_class(IO_FH_mvr)
     bpy.utils.register_class(IO_FH_gdtf)
-    bpy.types.TOPBAR_MT_file_import.append(menu_func)
+    bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
+    bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
 
 
 def unregister():
-    bpy.types.TOPBAR_MT_file_import.remove(menu_func)
+    bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
+    bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
     bpy.utils.unregister_class(IO_FH_mvr)
     bpy.utils.unregister_class(IO_FH_gdtf)
+    bpy.utils.unregister_class(ExportMVR)
     bpy.utils.unregister_class(ImportMVR)
     bpy.utils.unregister_class(ImportGDTF)
 
