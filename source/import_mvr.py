@@ -117,6 +117,8 @@ def add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path, fixture_id
             extracted[fixture.gdtf_spec] = 0
         else:
             extracted[fixture.gdtf_spec] += 1
+    else:
+        print(f"{fixture.gdtf_spec} not in mvr package")
 
     unique_name = f"{fixture.name} {layer_idx}-{fixture_idx}"
     if existing_fixture is not None:
@@ -124,8 +126,12 @@ def add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path, fixture_id
                       fixture_id, fixture.color, group_collect, fixture, TARGETS)
     else:
         unique_name = create_unique_fixture_name(unique_name, folder_path)
+        print(f"{unique_name} not available")
+
+        '''
         load_gdtf(context, fixture_file, mscale, unique_name, fixture_pos, focus_point,
                   fixture_id, fixture.color, group_collect, fixture, TARGETS)
+        '''
 
 
 def get_child_list(context, mscale, mvr_scene, child_list, layer_index, folder_path,
