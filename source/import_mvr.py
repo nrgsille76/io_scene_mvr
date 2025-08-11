@@ -117,21 +117,18 @@ def add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path, fixture_id
             extracted[fixture.gdtf_spec] = 0
         else:
             extracted[fixture.gdtf_spec] += 1
-    else:
-        print(f"{fixture.gdtf_spec} not in mvr package")
 
     unique_name = f"{fixture.name} {layer_idx}-{fixture_idx}"
     if existing_fixture is not None:
         fixture_build(context, fixture_file, mscale, unique_name, fixture_pos, focus_point,
                       fixture_id, fixture.color, group_collect, fixture, TARGETS)
     else:
+        print(f"{fixture.gdtf_spec} not in mvr package, using a generic PAR instead.")
         unique_name = create_unique_fixture_name(unique_name, folder_path)
-        print(f"{unique_name} not available")
-
-        '''
+        fixture_file = os.path.join(Path(folder_path).parent, "NRGSille_Lighting@Simple_LED_PAR@rev1.gdtf")
+        
         load_gdtf(context, fixture_file, mscale, unique_name, fixture_pos, focus_point,
                   fixture_id, fixture.color, group_collect, fixture, TARGETS)
-        '''
 
 
 def get_child_list(context, mscale, mvr_scene, child_list, layer_index, folder_path,
@@ -509,7 +506,6 @@ def load(operator, context, files=[], directory="", filepath="", scale_objects=1
     active = context.view_layer.layer_collection.children.get(default_layer.name)
     if active is not None:
         context.view_layer.active_layer_collection = active
-
     context.window.cursor_set('DEFAULT')
 
     return {'FINISHED'}
