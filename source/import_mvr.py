@@ -477,7 +477,7 @@ def load_mvr(context, filename, mscale=mathutils.Matrix(), FIXTURES=True, TARGET
     viewlayer.update()
     imported_layers.clear()
     #[fl.unlink() for fl in Path(folder_path).iterdir() if fl.is_file()] 
-    print("MVR scene loaded in %.4f sec." % (time.time() - start_time))
+    print("MVR scene loaded in %.4f sec.\n" % (time.time() - start_time))
 
 
 def load(operator, context, files=[], directory="", filepath="", scale_objects=1.0,
