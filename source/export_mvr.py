@@ -24,7 +24,7 @@ def get_filepath(file, assets):
 
     for root, dirs, files in os.walk(assets):
         if file in files:
-            file_path = os.path.join(root, file)
+            filepath = os.path.join(root, file)
 
     return filepath
 
@@ -121,8 +121,9 @@ def export_mvr(context, obj, objects, assets, folder, selection, matrix):
             geometry = '.'.join((obj.name, "3ds"))
             file_path = os.path.join(folder, geometry)
             get_3ds(obj, geometry)
-        mvr_object = pymvr.Geometry3D(file_name=geometry)
-        objects.append((file_path, geometry))     
+        if (file_path, geometry) not in objects:
+            mvr_object = pymvr.Geometry3D(file_name=geometry)
+            objects.append((file_path, geometry))     
     else:
         geometry = '.'.join((obj.name, "3ds"))
         get_3ds(obj, geometry)
@@ -165,40 +166,52 @@ def save_mvr(operator, context, items, filename, selection=False, matrix=mathuti
                         trans = ob.get("Transform")
                         symbol_name = ob.get("MVR Name")
                         transmtx = Matrix(list((trans[:3], trans[3:6], trans[6:9], trans[9:])))
-                        scene_object = pymvr.SceneObject(uuid=uid, name=symbol_name, matrix=transmtx).to_xml()
-                        geometries = pymvr.Geometries().to_xml(parent=scene_object)
-                        symbol_list = pymvr.ChildList().to_xml(parent=geometries)
+                        scene_object = pymvr.SceneObject(uuid=ob.get("UUID"), name=symbol_name, matrix=transmtx).to_xml()
+                        geometries = pymvr.Geometries()
+                        geometries.geometry3d.clear()
+                        geometries.symbol.clear()
                         print("exporting Symbol... %s" % symbol_name)
                         instance = ob.instance_collection.get("Reference") if ob.instance_collection else ob.get("Reference")
-                        mvr_object = pymvr.Symbol(uuid=ob.get("UUID"), symdef=instance).to_xml()
-                        symbol_list.append(mvr_object)
+                        mvr_object = pymvr.Symbol(uuid=uid, symdef=instance)
+                        geometries.symbol.append(mvr_object)
+                        geometries.to_xml(parent=scene_object)
                     else:
                         transmtx = get_trans_matrix(matrix, ob)
                         scene_object = pymvr.SceneObject(name=ob.name, matrix=transmtx).to_xml()
-                        geometries = pymvr.Geometries().to_xml(parent=scene_object)
-                        mesh_list = pymvr.ChildList().to_xml(parent=geometries)
+                        geometries = pymvr.Geometries()
+                        geometries.geometry3d.clear()
+                        geometries.symbol.clear()
                         print("exporting Geometry3D... %s.3ds" % ob.name)
                         objects_list, mvr_object = export_mvr(context, ob, objects_list, assets_path, folder_path, selection, matrix)
-                        mesh_list.append(mvr_object.to_xml())
+                        geometries.geometry3d.append(mvr_object)
+                        geometries.to_xml(parent=scene_object)
                     child_list.append(scene_object)
 
             elif item.name == "AUXData":
                 print("exporting AUXData...")
                 for child in item.children:
                     symdef_uid = child.get("UUID")
-                    print("creating Symdef... %s" % item.name)
+                    print("creating Symdef... %s" % child.name)
                     symdef = pymvr.Symdef(uuid=symdef_uid, name=child.name).to_xml()
                     symlist = pymvr.ChildList().to_xml(parent=symdef)
 
                     for geo in child.children:
                         geo_name = geo.name
+                        file_path = None
                         for ob in geo.objects:
                             if ob.type == 'MESH':
                                 geo_name = ob.data.get("Reference")
+                                filepath = get_filepath(geo_name, assets_path)
+                                if filepath and file_path is None:
+                                    file_path = filepath
                                 objects_list.extend(get_material_images(ob.active_material, folder_path))
+                        if file_path is None:
+                            geo_name = '.'.join((ob.name, "3ds"))
+                            file_path = os.path.join(folder_path, geo_name)
+                            export_3ds(context, file_path, geo.all_objects, selection, matrix, geo.name)
                         print("exporting Geometry3D... %s" % geo_name)
-                        export_3ds(context, file_path, geo.all_objects, selection, matrix, item.name)
                         mvr_object = pymvr.Geometry3D(file_name=geo_name).to_xml()
+                        objects_list.append((file_path, geo_name))
                         symlist.append(mvr_object)
                     auxdata.symdefs.append(symdef)
 
@@ -208,15 +221,17 @@ def save_mvr(operator, context, items, filename, selection=False, matrix=mathuti
                 child_list = pymvr.ChildList().to_xml(parent=layer)
                 transmtx = get_trans_matrix(matrix, item.objects[0])
                 scene_object = pymvr.SceneObject(name=item.name, matrix=transmtx).to_xml()
-                geometries = pymvr.Geometries().to_xml(parent=scene_object)
-                geo_list = pymvr.ChildList().to_xml(parent=geometries)
+                geometries = pymvr.Geometries()
+                geometries.geometry3d.clear()
+                geometries.symbol.clear()
                 geo_name = '.'.join((item.name, "3ds"))
                 file_path = os.path.join(folder_path, geo_name)
                 print("exporting Geometry3D... %s" % geo_name)
                 export_3ds(context, file_path, item.all_objects, selection, matrix, item.name)
                 mvr_object = pymvr.Geometry3D(file_name=geo_name)
-                geo_list.append(mvr_object.to_xml())
+                geometries.geometry3d.append(mvr_object)
                 objects_list.append((file_path, geo_name))
+                geometries.to_xml(parent=scene_object)
 
                 for ob in item.objects:
                     if ob.type == 'MESH':
@@ -241,19 +256,19 @@ def save_mvr(operator, context, items, filename, selection=False, matrix=mathuti
                         trs = [1000 * vec for vec in transform[:9]]
                         transmtx = Matrix(list((trs[:3], trs[3:6], trs[6:9], transform[9:])))
                         scene_object = pymvr.SceneObject(name=child.name, uuid=uid, matrix=transmtx).to_xml()
-                        geometries = pymvr.Geometries().to_xml(parent=scene_object)
-                        geo_list = pymvr.ChildList().to_xml(parent=geometries)
                     else:
                         transmtx = get_trans_matrix(matrix, child.objects[0])
                         scene_object = pymvr.SceneObject(name=child.name, matrix=transmtx).to_xml()
-                        geometries = pymvr.Geometries().to_xml(parent=scene_object)
-                        geo_list = pymvr.ChildList().to_xml(parent=geometries)
+                    geometries = pymvr.Geometries()
+                    geometries.geometry3d.clear()
+                    geometries.symbol.clear()
 
                     for ob in child.objects:
                         print("exporting Geometry3D... %s.3ds" % ob.name)
                         objects_list, mvr_object = export_mvr(context, ob, objects_list, assets_path, folder_path, selection, matrix)
                         if mvr_object is not None:
-                            geo_list.append(mvr_object.to_xml())
+                            geometries.geometry3d.append(mvr_object)
+                    geometries.to_xml(parent=scene_object)
                     child_list.append(scene_object)
 
         auxdata.to_xml(parent=scene)
@@ -266,7 +281,7 @@ def save_mvr(operator, context, items, filename, selection=False, matrix=mathuti
     except Exception as exc:
         print(exc)
 
-    print("MVR scene exported in %.4f sec." % (time.time() - start_time))
+    print("MVR scene exported in %.4f sec.\n" % (time.time() - start_time))
 
 
 def save(operator, context, filepath="", collection="", use_selection=False, use_collection=False, global_matrix=None):
