@@ -75,11 +75,11 @@ def get_trans_matrix(mtx, obj=None):
     return trans_mtx
 
 
-def get_fixture(fixture, specs, assets, matrix):
+def get_fixture(fixture, assets, matrix):
     uid = fixture.get("UUID")
     focus_point = None
     fix_name = fixture.get("Fixture Name")
-    specs = '@'.join((child.get("Company"), fix_name))
+    specs = '@'.join((fixture.get("Company"), fix_name))
     base = next((ob for ob in fixture.objects if ob.get("Use Root")), fixture.objects[0])
     target = next((ob for ob in fixture.objects if ob.get("Geometry Type") == "Target"), None)
     fix_id = fixture.get("Fixture ID")
@@ -252,9 +252,14 @@ def save_mvr(operator, context, items, filename, selection=False, matrix=mathuti
                     print("creating SceneObject... %s" % child.name)
                     if child.get("MVR Class") == "SceneObject":
                         uid = child.get("UUID")
-                        transform = child.objects[0].get("Transform")
-                        trs = [1000 * vec for vec in transform[:9]]
-                        transmtx = Matrix(list((trs[:3], trs[3:6], trs[6:9], transform[9:])))
+                        child_obj = child.objects[0]
+                        transform = child_obj.get("Transform")
+                        scale_vec = child_obj.matrix_world.copy().to_scale()
+                        if all(abs(vec) < 0.01 for vec in scale_vec):
+                            trs = [1000 * vec for vec in transform[:9]]
+                        else:
+                            trs = transform[:9]
+                        transmtx = Matrix(list((trs[:3], trs[3:6], trs[6:], transform[9:])))
                         scene_object = pymvr.SceneObject(name=child.name, uuid=uid, matrix=transmtx).to_xml()
                     else:
                         transmtx = get_trans_matrix(matrix, child.objects[0])
@@ -305,7 +310,6 @@ def save(operator, context, filepath="", collection="", use_selection=False, use
             items = item_collection
 
     save_mvr(operator, context, items, filepath, use_selection, global_matrix)
-
     context.window.cursor_set('DEFAULT')
 
     return {'FINISHED'}
