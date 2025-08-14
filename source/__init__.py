@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 __author__ = "Sebastian Sille <nrgsille@gmail.com>"
-__version__ = "1.2.6"
+__version__ = "1.2.7"
 __date__ = "2 Aug 2024"
 
 
+import os
 import bpy
 from bpy_extras.io_utils import (
     ImportHelper,
@@ -21,8 +22,14 @@ from bpy.props import (
     EnumProperty,
     FloatProperty,
     StringProperty,
+    PointerProperty,
     CollectionProperty,
     FloatVectorProperty,
+)
+from bpy.types import (
+    Operator,
+    FileHandler,
+    AddonPreferences,
 )
 from . import export_mvr
 from . import import_mvr
@@ -32,7 +39,7 @@ from . import import_gdtf
 bl_info = {
     "name": "Import MVR & GDTF",
     "author": "Sebastian Sille",
-    "version": (1, 2, 6),
+    "version": (1, 2, 7),
     "blender": (4, 0, 0),
     "location": "File > Import",
     "description": "Import My Virtual Rig and General Device Type Format",
@@ -52,8 +59,24 @@ if "bpy" in locals():
         importlib.reload(import_gdtf)
 
 
+class MVR_AddonPreferences(AddonPreferences):
+    bl_idname = __package__
+
+    profile_path: StringProperty(
+        name="GDTF File Path",
+        description="Directory of GDTF profiles",
+        default="",
+        subtype='DIR_PATH',
+    )
+
+    def draw(self, context):
+        layout = self.layout
+        line = layout.row(align=True)
+        line.prop(self, "profile_path", text="Path to GDTF Files", icon='FOLDER_REDIRECT', placeholder="//gdtf/")
+
+
 @orientation_helper(axis_forward='Y', axis_up='Z')
-class ImportMVR(bpy.types.Operator, ImportHelper):
+class ImportMVR(Operator, ImportHelper):
     """Import My Virtual Rig"""
     bl_idname = "import_scene.mvr"
     bl_label = "Import MVR (.mvr)"
@@ -87,15 +110,22 @@ class ImportMVR(bpy.types.Operator, ImportHelper):
         description="Use constraints for targets",
         default=True,
     )
+    fixture_path: StringProperty(
+        name="GDTF File Path",
+        description="Export GDTF profiles from this directory",
+        default="",
+    )
 
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-        import_mvr_include(layout, self)
+        import_mvr_include(layout, self, context)
         import_mvr_transform(layout, self)
 
     def execute(self, context):
+        if os.path.lexists(context.preferences.addons[__package__].preferences.profile_path):
+            self.fixture_path = context.preferences.addons[__package__].preferences.profile_path
         keywords = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob"))
         global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4()
         keywords["global_matrix"] = global_matrix
@@ -105,33 +135,37 @@ class ImportMVR(bpy.types.Operator, ImportHelper):
         return self.invoke_popup(context)
 
 
-def import_mvr_include(layout, operator):
+def import_mvr_include(layout, operator, context):
     header, body = layout.panel("MVR_import_include", default_closed=False)
+    prefs = context.preferences.addons[__package__].preferences
     header.label(text="Include")
     if body:
-        layrow = layout.row(align=True)
-        layrow.prop(operator, "use_collection")
-        layrow.label(text="", icon='OUTLINER_COLLECTION' if operator.use_collection else 'GROUP')
-        layrow = layout.row(align=True)
-        layrow.prop(operator, "use_fixtures")
-        layrow.label(text="", icon='OUTLINER_OB_LIGHT' if operator.use_fixtures else 'LIGHT')
+        line = body.row(align=True)
+        line.prop(operator, "use_collection")
+        line.label(text="", icon='OUTLINER_COLLECTION' if operator.use_collection else 'GROUP')
+        line = body.row(align=True)
+        line.prop(operator, "use_fixtures")
+        line.label(text="", icon='OUTLINER_OB_LIGHT' if operator.use_fixtures else 'LIGHT')
+        line = body.row(align=True)
+        line.enabled = (operator.use_fixtures == True)
+        line.prop(operator, "fixture_path", text="GDTF Path", icon='FILE_FOLDER', placeholder=prefs.profile_path)
 
 
 def import_mvr_transform(layout, operator):
     header, body = layout.panel("MVR_import_transform", default_closed=False)
     header.label(text="Transform")
     if body:
-        layout.prop(operator, "scale_objects")
-        layrow = layout.row(align=True)
-        layrow.enabled = (operator.use_fixtures == True)
-        layrow.prop(operator, "use_targets")
-        layrow.label(text="", icon='CON_STRETCHTO' if operator.use_targets else 'CON_TRACKTO')
-        layout.prop(operator, "axis_forward")
-        layout.prop(operator, "axis_up")
+        body.prop(operator, "scale_objects")
+        line = body.row(align=True)
+        line.enabled = (operator.use_fixtures == True)
+        line.prop(operator, "use_targets")
+        line.label(text="", icon='CON_STRETCHTO' if operator.use_targets else 'CON_TRACKTO')
+        body.prop(operator, "axis_forward")
+        body.prop(operator, "axis_up")
 
 
 @orientation_helper(axis_forward='Y', axis_up='Z')
-class ExportMVR(bpy.types.Operator, ExportHelper):
+class ExportMVR(Operator, ExportHelper):
     """Export My Virtual Rig"""
 
     bl_idname = "export_scene.mvr"
@@ -151,23 +185,37 @@ class ExportMVR(bpy.types.Operator, ExportHelper):
         description="Export selected objects only",
         default=False,
     )
+    use_fixtures: BoolProperty(
+        name="Fixtures",
+        description="Export fixtures of the scene",
+        default=True,
+    )
     use_collection: BoolProperty(
         name="Collection",
         description="Export active collection only",
         default=False,
+    )
+    use_targets: BoolProperty(
+        name="Targets",
+        description="Export target positions",
+        default=True,
+    )
+    fixture_path: StringProperty(
+        name="GDTF File Path",
+        description="Export GDTF profiles from this directory",
+        default="",
     )
 
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-
-        browser = context.space_data.type == 'FILE_BROWSER'
-
-        export_mvr_include(layout, self, browser)
+        export_mvr_include(layout, self, context)
         export_mvr_transform(layout, self)
 
     def execute(self, context):
+        if os.path.lexists(context.preferences.addons[__package__].preferences.profile_path):
+            self.fixture_path = context.preferences.addons[__package__].preferences.profile_path
         keywords = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob", "check_existing"))
         global_matrix = axis_conversion(to_forward=self.axis_forward, to_up=self.axis_up).to_4x4()
         keywords["global_matrix"] = global_matrix
@@ -175,28 +223,44 @@ class ExportMVR(bpy.types.Operator, ExportHelper):
         return export_mvr.save(self, context, **keywords)
 
 
-def export_mvr_include(layout, operator, browser):
+def export_mvr_include(layout, operator, context):
     header, body = layout.panel("MVR_export_include", default_closed=False)
+    prefs = context.preferences.addons[__package__].preferences
     header.label(text="Include")
     if body:
-        if browser:
-            line = body.row(align=True)
-            line.prop(operator, "use_selection")
-            line.label(text="", icon='RESTRICT_SELECT_OFF' if operator.use_selection else 'RESTRICT_SELECT_ON')
+        line = body.row(align=True)
+        line.prop(operator, "use_selection")
+        line.label(text="", icon='RESTRICT_SELECT_OFF' if operator.use_selection else 'RESTRICT_SELECT_ON')
+        if context.space_data.type == 'FILE_BROWSER':
             line = body.row(align=True)
             line.prop(operator, "use_collection")
             line.label(text="", icon='OUTLINER_COLLECTION' if operator.use_collection else 'GROUP')
+        line = body.row(align=True)
+        line.prop(operator, "use_fixtures")
+        line.label(text="", icon='OUTLINER_OB_LIGHT' if operator.use_fixtures else 'LIGHT')
+        if context.space_data.type == 'FILE_BROWSER':
+            line = body.row(align=True)
+            line.enabled = (operator.use_fixtures == True)
+            line.prop(operator, "fixture_path", text="GDTF Path", icon='FILE_FOLDER', placeholder=prefs.profile_path)
+        else:
+            line = body.row(align=True)
+            line.enabled = (operator.use_fixtures == True)
+            line.prop(prefs, "profile_path", text="GDTF Path", icon='FOLDER_REDIRECT', placeholder="//gdtf/")
 
 
 def export_mvr_transform(layout, operator):
     header, body = layout.panel("MVR_export_transform", default_closed=False)
     header.label(text="Transform")
     if body:
+        line = body.row(align=True)
+        line.enabled = (operator.use_fixtures == True)
+        line.prop(operator, "use_targets")
+        line.label(text="", icon='CON_STRETCHTO' if operator.use_targets else 'CON_TRACKTO')
         body.prop(operator, "axis_forward")
         body.prop(operator, "axis_up")
 
 
-class IO_FH_mvr(bpy.types.FileHandler):
+class IO_FH_mvr(FileHandler):
     bl_idname = "IO_FH_MVR"
     bl_label = "MVR"
     bl_import_operator = "import_scene.mvr"
@@ -209,7 +273,7 @@ class IO_FH_mvr(bpy.types.FileHandler):
 
 
 @orientation_helper(axis_forward='Y', axis_up='Z')
-class ImportGDTF(bpy.types.Operator, ImportHelper):
+class ImportGDTF(Operator, ImportHelper):
     """Import General Device Type Format"""
     bl_idname = "import_scene.gdtf"
     bl_label = "Import GDTF (.gdtf)"
@@ -327,38 +391,38 @@ def import_gdtf_include(layout, operator):
     header, body = layout.panel("GDTF_import_include", default_closed=False)
     header.label(text="Include")
     if body:
-        layrow = layout.row(align=True)
-        layrow.prop(operator, "use_collection")
-        layrow.label(text="", icon='OUTLINER_COLLECTION' if operator.use_collection else 'GROUP')
-        layout.prop(operator, "fixture_index")
-        layout.prop(operator, "fixture_count")
-        layout.prop(operator, "fixture_mode")
-        layout.prop(operator, "gel_color")
-        layrow = layout.row(align=True)
-        layrow.prop(operator, "use_beams")
-        layrow.label(text="", icon='OUTLINER_OB_LIGHT' if operator.use_beams else 'LIGHT')
-        layrow = layout.row(align=True)
-        layrow.enabled = (operator.use_beams == True)
-        layrow.prop(operator, "use_show_cone")
-        layrow.label(text="", icon='LIGHT_SPOT' if operator.use_show_cone else 'LIGHT_HEMI')
+        line = body.row(align=True)
+        line.prop(operator, "use_collection")
+        line.label(text="", icon='OUTLINER_COLLECTION' if operator.use_collection else 'GROUP')
+        body.prop(operator, "fixture_index")
+        body.prop(operator, "fixture_count")
+        body.prop(operator, "fixture_mode")
+        body.prop(operator, "gel_color")
+        line = layout.row(align=True)
+        line.prop(operator, "use_beams")
+        line.label(text="", icon='OUTLINER_OB_LIGHT' if operator.use_beams else 'LIGHT')
+        line = layout.row(align=True)
+        line.enabled = (operator.use_beams == True)
+        line.prop(operator, "use_show_cone")
+        line.label(text="", icon='LIGHT_SPOT' if operator.use_show_cone else 'LIGHT_HEMI')
 
 
 def import_gdtf_transform(layout, operator):
     header, body = layout.panel("GDTF_import_transform", default_closed=False)
     header.label(text="Transform")
     if body:
-        layout.prop(operator, "fixture_position")
-        layout.prop(operator, "align_objects")
-        layout.prop(operator, "align_axis")
-        layout.prop(operator, "scale_objects")
-        layrow = layout.row(align=True)
-        layrow.prop(operator, "use_targets")
-        layrow.label(text="", icon='CON_STRETCHTO' if operator.use_targets else 'CON_TRACKTO')
-        layout.prop(operator, "axis_forward")
-        layout.prop(operator, "axis_up")
+        body.prop(operator, "fixture_position")
+        body.prop(operator, "align_objects")
+        body.prop(operator, "align_axis")
+        body.prop(operator, "scale_objects")
+        line = layout.row(align=True)
+        line.prop(operator, "use_targets")
+        line.label(text="", icon='CON_STRETCHTO' if operator.use_targets else 'CON_TRACKTO')
+        body.prop(operator, "axis_forward")
+        body.prop(operator, "axis_up")
 
 
-class IO_FH_gdtf(bpy.types.FileHandler):
+class IO_FH_gdtf(FileHandler):
     bl_idname = "IO_FH_GDTF"
     bl_label = "GDTF"
     bl_import_operator = "import_scene.gdtf"
@@ -379,6 +443,7 @@ def menu_func_export(self, context):
 
 
 def register():
+    bpy.utils.register_class(MVR_AddonPreferences)
     bpy.utils.register_class(ImportGDTF)
     bpy.utils.register_class(ImportMVR)
     bpy.utils.register_class(ExportMVR)
@@ -396,6 +461,7 @@ def unregister():
     bpy.utils.unregister_class(ExportMVR)
     bpy.utils.unregister_class(ImportMVR)
     bpy.utils.unregister_class(ImportGDTF)
+    bpy.utils.unregister_class(MVR_AddonPreferences)
 
 
 if __name__ == "__main__":
