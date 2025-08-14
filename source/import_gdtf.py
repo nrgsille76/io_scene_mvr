@@ -17,6 +17,7 @@ import mathutils
 import uuid as pyuid
 import py_gdtf as pygdtf
 from types import SimpleNamespace
+from .export_mvr import get_gdtf_name
 from io_scene_3ds.import_3ds import load_3ds
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
 from pathlib import Path
@@ -55,14 +56,17 @@ def cleanup_name(geometry):
 
 def create_fixture_name(name):
     if '@' not in name:
-        return name
+        return Path(name).stem
     split_name = name.split('@')
-    if len(split_name) >= 1:
+    if len(split_name) > 2:
         manufacturer = split_name[0]
         fixture_name = split_name[1]
-        clean_name = manufacturer + '_' + fixture_name
+        clean_name = manufacturer + '@' + fixture_name
+    elif len(split_name) > 1:
+        manufacturer = split_name[0]
+        clean_name = Path(split_name[1]).stem
     else:
-        clean_name = split_name[0]
+        clean_name = Path(split_name[0]).stem
     return clean_name
 
 
@@ -73,14 +77,24 @@ def create_fixture_id(item, fixture_id):
     item_property.update(default=0, min=0, max=4096, soft_min=0, soft_max=4096)
 
 
+def get_fixture_address(fixture_id):
+    dmx_break = 0
+    universe = abs((int(fixture_id) - 1)) // 512 + 1
+    address = abs((int(fixture_id) - 1)) % 512 + 1
+
+    return dmx_break, universe, address
+
+
 def create_gdtf_props(item, name):
-    if '_' in name:
+    if '@' in name:
+        split_name = name.split('@')
+    elif '_' in name:
         split_name = name.split('_')
     else:
         split_name = name.split()
     if len(split_name) > 2:
-        item['Company'] = ' '.join(split_name[:2])
-        fixture_name = ' '.join(split_name[2:])
+        item['Company'] = split_name[0]
+        fixture_name = ' '.join(split_name[1:])
     elif len(split_name) > 1:
         item['Company'] = split_name[0]
         fixture_name = split_name[1]
@@ -392,6 +406,15 @@ def create_factor_property(item, prop, factor=0.0):
     item.id_properties_ensure()
     factor_property = item.id_properties_ui(prop)
     factor_property.update(default=factor, min=0.0, max=1.0, soft_min=0.0, soft_max=1.0, precision=1, step=0.1, subtype='FACTOR')
+
+
+def create_patch_property(item, patch):
+    props = ["Patch Break", "Patch Universe", "Patch Address"]
+    for p, number in enumerate(patch):
+        item[props[p]] = number
+        item.id_properties_ensure()
+        patch_property = item.id_properties_ui(props[p])
+        patch_property.update(default=number, min=0, max=262144, soft_min=0, soft_max=512)
 
 
 def create_power_property(item, energy):
@@ -1465,7 +1488,16 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fix_id
     # Import Fixture Model Collection
     model_collection = get_fixture_models(gdtf_profile, fixture_name, fix_id, uid, mode, BEAMS, TARGETS, CONES, MODE_NR)
     if model_collection:
-        model_collection.name = index_name(fixture_name)
+        patch = get_fixture_address(fix_id)
+        if not fixture:
+            model_collection["GDTF Name"] = get_gdtf_name(name)
+        else:
+            model_collection["GDTF Name"] = fixture.gdtf_spec
+            if len(fixture.addresses):
+                numbers = fixture.addresses[0]
+                patch = numbers.dmx_break, numbers.universe, numbers.address
+        model_collection.name = index_name(fixture_name.replace('@', ' '))
+        create_patch_property(model_collection, patch)
         if collect and model_collection.name not in collect.children:
             collect.children.link(model_collection)
 
@@ -1564,7 +1596,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fix_id
             if model_collection.name not in layer_collect.collection.children:
                 layer_collect.collection.children.link(model_collection)
             active_layer = layer_collect.children.get(model_collection.name)
-        print("creating fixture... %s" % model_collection.name)
+        print("creating Fixture... %s" % model_collection.name)
         for obj in model_collection.objects:
             linkDict[obj.name] = obj
             viewlayer.objects.active = obj
@@ -1597,7 +1629,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fix_id
                 obj.id_properties_ensure()
                 target_property = obj.id_properties_ui('Target')
                 target_property.update(default=TARGETS)
-                ob_name = fixture_name if fixture is None else name
+                ob_name = fixture_name.replace('@', '-')
                 obj.matrix_world = position @ obj.matrix_world.copy()
                 obj.name = index_name(ob_name)
                 obj['UUID'] = uid
@@ -1605,7 +1637,8 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fix_id
                 obj.select_set(False)
                 obj.scale = [1.0] * 3
                 obj.hide_select = True
-                wheelname = 'ID%d_%s_Wheel' % (fix_id, fixture_name) if fix_id >=1 else '%s_Wheel' % fixture_name
+                fix_name = fixture_name.replace('@', '-')
+                wheelname = 'ID%d_%s_Wheel' % (fix_id, fix_name) if fix_id >=1 else '%s_Wheel' % fix_name
                 if len(obj.data.materials):
                     wheel_material = obj.data.materials[0]
                     wheel_material.name = wheelname
@@ -1941,8 +1974,8 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fix_id
     linkDict.clear()
 
 
-def load_gdtf(context, filename, mscale, name, position, focus_point, fix_id, gelcolor,
-              collect, fixture, TARGETS=True, BEAMS=True, CONES=False, MODE_NR=0):
+def load_gdtf(context, filename, mscale, name, position, focus_point, fix_id,
+              gelcolor, collect, TARGETS=True, BEAMS=True, CONES=False, MODE_NR=0):
 
     rangeData.clear()
     targetData.clear()
@@ -1950,7 +1983,7 @@ def load_gdtf(context, filename, mscale, name, position, focus_point, fix_id, ge
 
     context.scene.cycles.preview_pause = True
     fixture_build(context, filename, mscale, name, position, focus_point, fix_id,
-                  gelcolor, collect, fixture, TARGETS, BEAMS, CONES, MODE_NR)
+                  gelcolor, collect, None, TARGETS, BEAMS, CONES, MODE_NR)
 
     rangeData.clear()
     targetData.clear()
@@ -1961,7 +1994,7 @@ def load_gdtf(context, filename, mscale, name, position, focus_point, fix_id, ge
 def load_prepare(context, filename, global_matrix, collect, align_objects, align_axis, scale_objects,
                  fix_index, fix_count, gel_color, device_position, TARGETS, BEAMS, CONES, MODE_NR):
 
-    name = Path(filename).stem
+    name = Path(filename).name
     mscale = mathutils.Matrix.Scale(scale_objects, 4)
 
     if global_matrix is not None:
@@ -1978,8 +2011,8 @@ def load_prepare(context, filename, global_matrix, collect, align_objects, align
             spread = (device_position[0], device_position[1], device_position[2] + (distribution - align))
         position = mathutils.Matrix.Translation(spread)
         focus_point = mathutils.Matrix.Translation((spread[0], spread[1], 0))
-        load_gdtf(context, filename, mscale, name, position, focus_point, idx,
-                  gel_color, collect, None, TARGETS, BEAMS, CONES, MODE_NR)
+        load_gdtf(context, filename, mscale, name, position, focus_point,
+                  idx, gel_color, collect, TARGETS, BEAMS, CONES, MODE_NR)
 
 
 def load(operator, context, files=[], directory="", filepath="", fixture_index=0, fixture_count=1, fixture_mode=1,
@@ -2008,6 +2041,7 @@ def load(operator, context, files=[], directory="", filepath="", fixture_index=0
     active = context.view_layer.layer_collection.children.get(default_layer.name)
     if active is not None:
         context.view_layer.active_layer_collection = active
+
     context.window.cursor_set('DEFAULT')
 
     return {'FINISHED'}
