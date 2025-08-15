@@ -86,20 +86,16 @@ def get_fixture_address(fixture_id):
 
 
 def create_gdtf_props(item, name):
-    if '@' in name:
-        split_name = name.split('@')
-    elif '_' in name:
-        split_name = name.split('_')
-    else:
-        split_name = name.split()
+    split_name = name.split('@')
     if len(split_name) > 2:
         item['Company'] = split_name[0]
-        fixture_name = ' '.join(split_name[1:])
+        fixture_name = split_name[1]
     elif len(split_name) > 1:
         item['Company'] = split_name[0]
-        fixture_name = split_name[1]
+        fixture_name = split_name[1].split('.')[0]
     else:
-        fixture_name = name
+        item['Company'] = "Custom"
+        fixture_name = name.split('.')[0]
     item['Fixture Name'] = fixture_name
 
 
@@ -785,11 +781,12 @@ def load_model(profile, name, model):
     return obj
 
 
-def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES, MODE_NR):
+def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEAMS, TARGETS, CONES, MODE_NR):
     """Create model collection."""
 
     objectDict = {}
     color_channels = set()
+    name = create_fixture_name(fixturename)
     fixturetype_id = profile.fixture_type_id
     collection = bpy.data.collections.new(name)
     dmx_mode = pygdtf.utils.get_dmx_mode_by_name(profile, mode)
@@ -802,11 +799,11 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
             dmx_mode = profile.dmx_modes[min(MODE_NR, len(profile.dmx_modes)) - 1]
         mode = dmx_mode.name
 
-    collection['Fixture ID'] = fixture_id
-    create_gdtf_props(collection, name)
     collection['UUID'] = uid
-    root_geometry = pygdtf.utils.get_geometry_by_name(profile, dmx_mode.geometry)
+    collection['Fixture ID'] = fixture_id
+    create_gdtf_props(collection, fixturename)
     dmx_channels = collect_dmx_channels(profile, mode)
+    root_geometry = pygdtf.utils.get_geometry_by_name(profile, dmx_mode.geometry)
     logical_channels = [channel for break_channels in dmx_channels for channel in break_channels]
     virtual_channels = pygdtf.utils.get_virtual_channels(profile, mode)
 
@@ -911,13 +908,13 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                         if geometry_class == "GeometryBeam":
                             mtl['Fixture ID'] = fixture_id
                         if obj.get('UUID') is None:
-                            create_gdtf_props(mtl, name)
+                            create_gdtf_props(mtl, fixturename)
                             mtl['Original Name'] = mtl_name
                             mtl['Model Name'] = mesh_name
                             mtl['UUID'] = fixturetype_id
             obj.name = geometry_name
             create_fixture_id(obj, fixture_id)
-            create_gdtf_props(obj, name)
+            create_gdtf_props(obj, fixturename)
 
             if geometry_name == cleanup_name(root_geometry):
                 obj['Fixture Mode'] = mode
@@ -1033,7 +1030,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         if light_data is None or light_data.get('Fixture Name') != lightname:
             light_data = data_lights.new(beamname, 'SPOT')
             light_data.use_custom_distance = True
-            create_gdtf_props(light_data, name)
+            create_gdtf_props(light_data, fixturename)
             light_data.spot_size = beam_angle
             light_data.energy = light_power
             light_data.color = beam_color
@@ -1052,7 +1049,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         light_object = bpy.data.objects.new('Spot', light_data)
         light_object.hide_select = True
         light_object.parent = obj_child
-        create_gdtf_props(light_object, name)
+        create_gdtf_props(light_object, fixturename)
         light_object['Geometry Class'] = geometry.__class__.__name__
         light_object['Lamp Type'] = light_data['Lamp Type'] = lamp_type
         light_object['Original Name'] = geometry.name
@@ -1170,7 +1167,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
         else:
             obj = load_blender_primitive(goboGeometry)
             obj.data['UUID'] = fixturetype_id
-        create_gdtf_props(obj, name)
+        create_gdtf_props(obj, fixturename)
         obj['Geometry Class'] = obj.data['Geometry Class'] = geometry_class     
         obj['Geometry Type'] = obj.data['Geometry Type'] = 'Gobo'
         create_radius_property(obj, goboGeometry.beam_radius)
@@ -1287,16 +1284,15 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
     moving_objects = [ob for ob in objectDict.values() if ob.get('Geometry Type') == 'Axis']
 
     if TARGETS:
-        target_uid = str(pyuid.uuid4())
         data_objects = bpy.data.objects
         main_target = bpy.data.objects.new('Target', None)
         main_target.empty_display_size = 0.4
         collection.objects.link(main_target)
         create_fixture_id(main_target, fixture_id)
-        create_gdtf_props(main_target, name)
+        create_gdtf_props(main_target, fixturename)
         main_target['Geometry Type'] = 'Target'
-        main_target['UUID'] = target_uid
-        targetData[target_uid] = main_target
+        main_target['UUID'] = target_id
+        targetData[target_id] = main_target
 
     for idx, obj in enumerate(moving_objects):
         center_object = check_center_object(obj)
@@ -1323,7 +1319,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                 lock_constraint.lock_axis = 'LOCK_Z'
             if center_object and center_parent:
                 lock_constraint.target = main_target
-                obj['Target ID'] = target_uid
+                obj['Target ID'] = target_id
             else:
                 if obj.parent and len(obj.parent.children) > 1:
                     if not center_object or (center_object and not center_parent):
@@ -1333,7 +1329,7 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
                         obj_target.empty_display_size = 0.2
                         obj_target.parent = main_target
                         create_fixture_id(obj_target, fixture_id)
-                        create_gdtf_props(obj_target, name)
+                        create_gdtf_props(obj_target, fixturename)
                         obj_target['Geometry Class'] = 'Target'
                         obj_target['Reference'] = obj.get('Original Name', obj.name)
                         collection.objects.link(obj_target)
@@ -1384,18 +1380,18 @@ def build_collection(profile, name, fixture_id, uid, mode, BEAMS, TARGETS, CONES
     return collection
 
 
-def get_fixture_models(profile, name, fixture_id, uid, dmx_mode, BEAMS, TARGETS, CONES, MODE_NR):
+def get_fixture_models(profile, name, fix_id, uid, target, dmx, BEAMS, TARGETS, CONES, MODE_NR):
     collections = bpy.data.collections
 
     if profile == None:
         return None
 
     new_collection = collections.get(name)
-    if new_collection and len(new_collection.objects) and new_collection.get('Fixture ID') == fixture_id:
+    if new_collection and len(new_collection.objects) and new_collection.get('Fixture ID') == fix_id:
         print("Getting collection from cache: %s" % name)
         return new_collection
     else:
-        new_collection = build_collection(profile, name, fixture_id, uid, dmx_mode, BEAMS, TARGETS, CONES, MODE_NR)
+        new_collection = build_collection(profile, name, fix_id, uid, target, dmx, BEAMS, TARGETS, CONES, MODE_NR)
         return new_collection
 
 
@@ -1416,11 +1412,12 @@ def get_tilt(model_collection, channels):
                 return obj
 
 
-def get_emit_material(obj, color, name, index, prop):
+def get_emit_material(obj, color, fixturename, index, prop):
     obj.hide_select = True
     obj.visible_shadow = False
     emit_color = obj.get('RGB')
-    beamname ='ID%d_%s_%s' % (index, name, prop) if index >= 1 else '%s_%s' % (name, prop)
+    bname = create_fixture_name(fixturename)
+    beamname ='ID%d_%s_%s' % (index, bname, prop) if index >= 1 else '%s_%s' % (bname, prop)
     if len(obj.data.materials):
         emit_material = obj.data.materials[0]
         emit_material['Fixture ID'] = index
@@ -1434,7 +1431,7 @@ def get_emit_material(obj, color, name, index, prop):
         if emit_color:
             emit_material['RGB'] = emit_color
     obj.active_material = emit_material
-    create_gdtf_props(emit_material, name)
+    create_gdtf_props(emit_material, fixturename)
     emit_material['Fixture ID'] = index
     emit_material['Geometry Type'] = 'Beam'
     emit_shader = PrincipledBSDFWrapper(emit_material, is_readonly=False, use_nodes=True)
@@ -1443,7 +1440,7 @@ def get_emit_material(obj, color, name, index, prop):
 
 
 
-def fixture_build(context, filename, mscale, name, position, focus_point, fix_id, gelcolor,
+def fixture_build(context, filename, mscale, fixname, position, focus_point, fix_id, gelcolor,
                   collect, fixture, TARGETS=True, BEAMS=True, CONES=False, MODE_NR=0):
 
     viewlayer = context.view_layer
@@ -1452,20 +1449,25 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fix_id
     layer_collect = viewlayer.layer_collection
     gdtf_profile = pygdtf.FixtureType(filename)
     has_focus = has_iris = zoom_range = False
-    fixture_name = create_fixture_name(name)
     uid = gdtf_profile.fixture_type_id
     gobo_material = random_gobo = None
-    mode = FixtureMode(gdtf_profile)
     has_gobos = has_blend = False
     color_controller = set()
     channels = []
     wheels = []
 
     if fixture:
-        mode = fixture.gdtf_mode
         color = convert_color(gelcolor)
         gelcolor = list(i for i in color[:3])
-        fixture_name = create_fixture_name(fixture.gdtf_spec)
+        name = fixture.gdtf_spec
+        mode = fixture.gdtf_mode
+        fixture_name = fixname
+        target_id = str(pyuid.uuid4()) if fixture.focus is None else fixture.focus
+    else:
+        name = fixname
+        mode = FixtureMode(gdtf_profile)
+        fixture_name = create_fixture_name(fixname)
+        target_id = str(pyuid.uuid4())
 
 
     def index_name(device):
@@ -1486,7 +1488,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fix_id
         data_collect.remove(index_collection)
 
     # Import Fixture Model Collection
-    model_collection = get_fixture_models(gdtf_profile, fixture_name, fix_id, uid, mode, BEAMS, TARGETS, CONES, MODE_NR)
+    model_collection = get_fixture_models(gdtf_profile, name, fix_id, uid, target_id, mode, BEAMS, TARGETS, CONES, MODE_NR)
     if model_collection:
         patch = get_fixture_address(fix_id)
         if not fixture:
@@ -1496,8 +1498,10 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fix_id
             if len(fixture.addresses):
                 numbers = fixture.addresses[0]
                 patch = numbers.dmx_break, numbers.universe, numbers.address
-        model_collection.name = index_name(fixture_name.replace('@', ' '))
+        model_collection.name = index_name(fixture_name)
         create_patch_property(model_collection, patch)
+        if TARGETS:
+            model_collection["Target ID"] = target_id
         if collect and model_collection.name not in collect.children:
             collect.children.link(model_collection)
 
@@ -1608,7 +1612,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fix_id
                         locked_child = child.constraints.get('Locked Track')
                         if locked_child and locked_child.target is None:
                             locked_child.target = obj.constraints[0].target
-                    if target:
+                    if target is not None:
                         locked.target = targetData.get(target)
             if obj.type == 'LIGHT':
                 obj.hide_select = True
@@ -1638,7 +1642,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fix_id
                 obj.scale = [1.0] * 3
                 obj.hide_select = True
                 fix_name = fixture_name.replace('@', '-')
-                wheelname = 'ID%d_%s_Wheel' % (fix_id, fix_name) if fix_id >=1 else '%s_Wheel' % fix_name
+                wheelname = 'ID%d_%s_Wheel' % (fix_id, fix_name) if fix_id >= 1 else '%s_Wheel' % fix_name
                 if len(obj.data.materials):
                     wheel_material = obj.data.materials[0]
                     wheel_material.name = wheelname
@@ -1648,7 +1652,7 @@ def fixture_build(context, filename, mscale, name, position, focus_point, fix_id
                     wheel_material = bpy.data.materials.new(wheelname)
                     obj.data.materials.append(wheel_material)
                 obj.active_material = wheel_material
-                create_gdtf_props(wheel_material, fixture_name)
+                create_gdtf_props(wheel_material, name)
                 wheel_material['Geometry Type'] = 'Gobo'
                 wheel_material['Fixture ID'] = fix_id
                 wheel_material['UUID'] = uid
