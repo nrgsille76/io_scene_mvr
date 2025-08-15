@@ -110,7 +110,7 @@ def check_existing(node, collection):
 
 
 def add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path, fixture_idx, layer_idx,
-                    focus_point, extracted, group_collect, TARGETS, fixture_path, fixture_group=None):
+                    extracted, group_collect, TARGETS, focus_points, fixture_path, fixture_group=None):
 
     """Add fixture to the scene"""
     fixture_pos = get_matrix(fixture, mscale)
@@ -134,6 +134,11 @@ def add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path, fixture_id
 
     unique_name = f"{fixture.name} {layer_idx}-{fixture_idx}"
 
+    """Get Focuspoints"""
+    focus_point = mscale
+    if len(focus_points):
+        focus_point = get_matrix(focus_points[0], mscale)
+
     if not existing_fixture:
         print(f"Info: {fixture.gdtf_spec} not available, using a generic PAR instead.")
         fixture.gdtf_spec = "NRGSille_Lighting@Simple_LED_PAR@rev2.gdtf"
@@ -141,6 +146,13 @@ def add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path, fixture_id
 
     fixture_build(context, fixture_file, mscale, unique_name, fixture_pos, focus_point,
                   fixture_id, fixture.color, group_collect, fixture, TARGETS)
+
+    if len(focus_points) and focus_points[0].geometries:
+        target_collect = next((col for col in bpy.data.collections if col.get("Target ID") == fixture.focus), None)
+        if target_collect:
+            group_collect = target_collect
+        process_mvr_object(context, mvr_scene, focus_points[0], fixture_idx,
+                           mscale, folder_path, extracted, group_collect)
 
 
 def get_child_list(context, mscale, mvr_scene, child_list, layer_index, folder_path,
@@ -180,16 +192,12 @@ def get_child_list(context, mscale, mvr_scene, child_list, layer_index, folder_p
 
     if FIXTURES:
         for fixture_idx, fixture in enumerate(child_list.fixtures):
-            focus_point = mscale
+            focus_points = []
             if fixture.focus is not None:
-                focus_points = [fp for fp in child_list.focus_points if fp.uuid == fixture.focus]
-                if len(focus_points):
-                    focus_point = get_matrix(focus_points[0], mscale)
-                    process_mvr_object(context, mvr_scene, focus_points[0], fixture_idx,
-                                       mscale, folder_path, extracted, layer_collection)
+                focus_points.extend([fp for fp in child_list.focus_points if fp.uuid == fixture.focus])
 
             add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path, fixture_idx, layer_index,
-                            focus_point, extracted, layer_collection, TARGETS, fixturepath, fixture_group)
+                            extracted, layer_collection, TARGETS, focus_points, fixturepath, fixture_group)
 
             if hasattr(fixture, "child_list") and fixture.child_list:
                 get_child_list(context, mscale, mvr_scene, fixture.child_list, fixture_idx, folder_path,
@@ -219,6 +227,7 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, folder_p
     class_name = mvr_object.__class__.__name__
     layer_collect = viewlayer.layer_collection
     symdef_id = isinstance(mvr_object, pymvr.Symdef)
+    focus_id = isinstance(mvr_object, pymvr.FocusPoint)
     active_layer = viewlayer.active_layer_collection
     print("creating %s... %s" % (class_name, name))
 
@@ -251,7 +260,7 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, folder_p
             for ob in imported_objects:
                 ob.rotation_mode = 'XYZ'
                 obname = ob.name.split('.')[0]
-                create_mvr_props(ob, class_name, obname, mesh_name, uid)
+                create_mvr_props(ob, class_name, obname, uid, mesh_name)
                 if ob.data:
                     ob.data.name = mesh_name
                     create_mvr_props(ob.data, node_type, obname, uid, item_name) 
@@ -282,14 +291,16 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, folder_p
         symbols.append(mvr_object)
     elif isinstance(mvr_object, pymvr.Geometry3D):
         geometrys.append(mvr_object)
-    elif not symdef_id and mvr_object.geometries:
+    elif mvr_object.geometries and (not symdef_id or focus_id):
         symbols += mvr_object.geometries.symbol
         geometrys += mvr_object.geometries.geometry3d
     else:
         symbols += mvr_object.symbol
         geometrys += mvr_object.geometry3d
 
-    if symdef_id:
+    if focus_id:
+        active_collect = group_collect
+    elif symdef_id:
         create_mvr_props(group_collect, class_name, name, uid)
         active_collect = next((col for col in data_collect if col.get('Reference') == uid), False)
         if not active_collect:
@@ -299,11 +310,12 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, folder_p
         if active_collect.get('MVR Class') is None:
             create_mvr_props(active_collect, class_name, uid)
         active_collect.hide_render = True
-    elif (len(geometrys) + len(symbols)) > 1:
+    elif not focus_id and (len(geometrys) + len(symbols)) > 1:
         if mvr_object.name is not None and len(mvr_object.name):
             obj_name = '%s - %s %d' % (class_name, mvr_object.name, mvr_idx)
         else:
             obj_name = '%s %d' % (class_name, mvr_idx) if mvr_idx >= 1 else class_name
+
         print("creating extra collection", obj_name)
         active_collect = bpy.data.collections.new(obj_name)
         create_mvr_props(active_collect, class_name, name, uid)
@@ -331,6 +343,7 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, folder_p
         if not symdef_id:
             symbol_mtx = get_matrix(mvr_object, symbol_mtx)
         symbol_collect = data_collect.get(symbol.symdef)
+
         if symbol_collect:
             if not len(name):
                 name = '%s %d' % (class_name, idx) if idx >= 1 else class_name
@@ -344,6 +357,17 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, folder_p
             symbol_object.instance_collection = symbol_collect
             create_mvr_props(symbol_object, symbol_type, name, uid, symbol.uuid)
             create_mvr_props(symbol_collect, symbol_type, name, symbol.uuid, symbol.symdef)
+
+    if focus_id:
+        target = next((ob for ob in group_collect.objects if
+                       ob.get("Geometry Type") == "Target" and
+                       ob.get("UUID") == mvr_object.uuid), None)
+        if target:
+            target_mtx = target.matrix_world.copy()
+            for ob in group_collect.objects:
+                if ob.get("MVR Class") == "FocusPoint" and ob.get("UUID") == mvr_object.uuid:
+                    ob.parent = target
+                    ob.matrix_parent_inverse = target_mtx.inverted()
 
 
 def transform_objects(layers, mscale):
@@ -520,6 +544,7 @@ def load(operator, context, files=[], directory="", filepath="", scale_objects=1
     active = context.view_layer.layer_collection.children.get(default_layer.name)
     if active is not None:
         context.view_layer.active_layer_collection = active
+
     context.window.cursor_set('DEFAULT')
 
     return {'FINISHED'}
