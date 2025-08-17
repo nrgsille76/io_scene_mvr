@@ -226,8 +226,8 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, folder_p
     scene_collect = context.scene.collection
     class_name = mvr_object.__class__.__name__
     layer_collect = viewlayer.layer_collection
-    symdef_id = isinstance(mvr_object, pymvr.Symdef)
     focus_id = isinstance(mvr_object, pymvr.FocusPoint)
+    symdef_id = isinstance(mvr_object, pymvr.Symdef)
     active_layer = viewlayer.active_layer_collection
     print("creating %s... %s" % (class_name, name))
 
@@ -291,10 +291,10 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, folder_p
         symbols.append(mvr_object)
     elif isinstance(mvr_object, pymvr.Geometry3D):
         geometrys.append(mvr_object)
-    elif mvr_object.geometries and (not symdef_id or focus_id):
+    elif not symdef_id and mvr_object.geometries:
         symbols += mvr_object.geometries.symbol
         geometrys += mvr_object.geometries.geometry3d
-    else:
+    elif not isinstance(mvr_object, pymvr.SceneObject):
         symbols += mvr_object.symbol
         geometrys += mvr_object.geometry3d
 
