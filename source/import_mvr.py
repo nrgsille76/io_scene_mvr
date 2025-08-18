@@ -269,7 +269,7 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, folder_p
                 elif ob.name in layer_collect.collection.objects:
                     active_layer.collection.objects.unlink(ob)
                 if ob.data:
-                    ob.matrix_world = world_matrix @ ob.matrix_world.copy() if gltf else world_matrix
+                    ob.matrix_world = world_matrix @ ob.matrix_world.copy() if (gltf or ob.type != 'MESH') else world_matrix
                 else:
                     ob.empty_display_size = 0.001
                 create_transform_property(ob)
@@ -312,7 +312,10 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, folder_p
         active_collect.hide_render = True
     elif not focus_id and (len(geometrys) + len(symbols)) > 1:
         if mvr_object.name is not None and len(mvr_object.name):
-            obj_name = '%s - %s %d' % (class_name, mvr_object.name, mvr_idx)
+            if mvr_idx >= 1:
+                obj_name = '%s - %s %d' % (class_name, mvr_object.name, mvr_idx)
+            else:
+                obj_name = '%s - %s' % (class_name, mvr_object.name)
         else:
             obj_name = '%s %d' % (class_name, mvr_idx) if mvr_idx >= 1 else class_name
 
@@ -377,7 +380,8 @@ def transform_objects(layers, mscale):
         if obj_collect is not None:
             global_mtx = get_matrix(mvr, mscale)
             for obj in obj_collect.objects:
-                obj.matrix_world = global_mtx @ obj.matrix_world.copy()
+                if obj.parent is None:
+                    obj.matrix_world = global_mtx @ obj.matrix_world.copy()
                 create_transform_property(obj)
 
     def collect_objects(childlist):
