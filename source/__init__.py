@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 __author__ = "Sebastian Sille <nrgsille@gmail.com>"
-__version__ = "1.2.8"
+__version__ = "1.2.9"
 __date__ = "2 Aug 2024"
 
 
@@ -39,7 +39,7 @@ from . import import_gdtf
 bl_info = {
     "name": "Import MVR & GDTF",
     "author": "Sebastian Sille",
-    "version": (1, 2, 8),
+    "version": (1, 2, 9),
     "blender": (4, 0, 0),
     "location": "File > Import",
     "description": "Import My Virtual Rig and General Device Type Format",
@@ -185,15 +185,20 @@ class ExportMVR(Operator, ExportHelper):
         description="Export selected objects only",
         default=False,
     )
-    use_fixtures: BoolProperty(
-        name="Fixtures",
-        description="Export fixtures of the scene",
-        default=True,
+    use_apply_transform: bpy.props.BoolProperty(
+        name="Apply Transform",
+        description="Apply matrix transform before export",
+        default=False,
     )
     use_collection: BoolProperty(
         name="Collection",
         description="Export active collection only",
         default=False,
+    )
+    use_fixtures: BoolProperty(
+        name="Fixtures",
+        description="Export fixtures of the scene",
+        default=True,
     )
     use_targets: BoolProperty(
         name="Targets",
@@ -256,6 +261,9 @@ def export_mvr_transform(layout, operator):
         line.enabled = (operator.use_fixtures == True)
         line.prop(operator, "use_targets")
         line.label(text="", icon='CON_STRETCHTO' if operator.use_targets else 'CON_TRACKTO')
+        line = body.row(align=True)
+        line.prop(operator, "use_apply_transform")
+        line.label(text="", icon='MESH_CUBE' if operator.use_apply_transform else 'MOD_SOLIDIFY')
         body.prop(operator, "axis_forward")
         body.prop(operator, "axis_up")
 
