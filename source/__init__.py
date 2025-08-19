@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 __author__ = "Sebastian Sille <nrgsille@gmail.com>"
-__version__ = "1.2.9"
+__version__ = "1.3.0"
 __date__ = "2 Aug 2024"
 
 
@@ -39,7 +39,7 @@ from . import import_gdtf
 bl_info = {
     "name": "Import MVR & GDTF",
     "author": "Sebastian Sille",
-    "version": (1, 2, 9),
+    "version": (1, 3, 0),
     "blender": (4, 0, 0),
     "location": "File > Import",
     "description": "Import My Virtual Rig and General Device Type Format",
@@ -185,7 +185,7 @@ class ExportMVR(Operator, ExportHelper):
         description="Export selected objects only",
         default=False,
     )
-    use_apply_transform: bpy.props.BoolProperty(
+    use_apply_transform: BoolProperty(
         name="Apply Transform",
         description="Apply matrix transform before export",
         default=False,
