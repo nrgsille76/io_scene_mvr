@@ -1,4 +1,5 @@
-# My Virtual Rig Format (.mvr)
+# MVR and GDTF for Blender 3D
+## My Virtual Rig (.mvr) and General Device Type Format (.gdtf)
 
 
 ---  
