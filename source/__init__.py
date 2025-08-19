@@ -180,6 +180,14 @@ class ExportMVR(Operator, ExportHelper):
         description="Export objects from this collection",
         default="",
     )
+    scale_factor: FloatProperty(
+        name="Scale",
+        description="Scale factor for all objects",
+        min=0.0, max=1000000.0,
+        soft_min=0.001, soft_max=100000.0,
+        default=1000.0,
+        subtype='FACTOR',
+    )
     use_selection: BoolProperty(
         name="Selection",
         description="Export selected objects only",
@@ -189,6 +197,11 @@ class ExportMVR(Operator, ExportHelper):
         name="Apply Transform",
         description="Apply matrix transform before export",
         default=False,
+    )
+    use_images: BoolProperty(
+        name="Images",
+        description="Export material texture images",
+        default=True,
     )
     use_collection: BoolProperty(
         name="Collection",
@@ -234,16 +247,18 @@ def export_mvr_include(layout, operator, context):
     header.label(text="Include")
     if body:
         line = body.row(align=True)
+        line.prop(operator, "use_images")
+        line.label(text="", icon='OUTLINER_OB_IMAGE' if operator.use_images else 'IMAGE_DATA')
+        line = body.row(align=True)
+        line.prop(operator, "use_fixtures")
+        line.label(text="", icon='OUTLINER_OB_LIGHT' if operator.use_fixtures else 'LIGHT')
+        line = body.row(align=True)
         line.prop(operator, "use_selection")
         line.label(text="", icon='RESTRICT_SELECT_OFF' if operator.use_selection else 'RESTRICT_SELECT_ON')
         if context.space_data.type == 'FILE_BROWSER':
             line = body.row(align=True)
             line.prop(operator, "use_collection")
             line.label(text="", icon='OUTLINER_COLLECTION' if operator.use_collection else 'GROUP')
-        line = body.row(align=True)
-        line.prop(operator, "use_fixtures")
-        line.label(text="", icon='OUTLINER_OB_LIGHT' if operator.use_fixtures else 'LIGHT')
-        if context.space_data.type == 'FILE_BROWSER':
             line = body.row(align=True)
             line.enabled = (operator.use_fixtures == True)
             line.prop(operator, "fixture_path", text="GDTF Path", icon='FILE_FOLDER', placeholder=prefs.profile_path)
@@ -257,6 +272,7 @@ def export_mvr_transform(layout, operator):
     header, body = layout.panel("MVR_export_transform", default_closed=False)
     header.label(text="Transform")
     if body:
+        body.prop(operator, "scale_factor")
         line = body.row(align=True)
         line.enabled = (operator.use_fixtures == True)
         line.prop(operator, "use_targets")
