@@ -17,7 +17,6 @@ import mathutils
 import uuid as pyuid
 import py_gdtf as pygdtf
 from types import SimpleNamespace
-from .export_mvr import get_gdtf_name
 from io_scene_3ds.import_3ds import load_3ds
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
 from pathlib import Path
@@ -1492,7 +1491,7 @@ def fixture_build(context, filename, mscale, fixname, position, focus_point, fix
     if model_collection:
         patch = get_fixture_address(fix_id)
         if not fixture:
-            model_collection["GDTF Name"] = get_gdtf_name(name)
+            model_collection["GDTF Name"] = name
         else:
             model_collection["GDTF Name"] = fixture.gdtf_spec
             if len(fixture.addresses):
