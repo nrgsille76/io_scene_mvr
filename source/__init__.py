@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 __author__ = "Sebastian Sille <nrgsille@gmail.com>"
-__version__ = "1.3.0"
+__version__ = "1.3.1"
 __date__ = "2 Aug 2024"
 
 
@@ -39,7 +39,7 @@ from . import import_gdtf
 bl_info = {
     "name": "Import MVR & GDTF",
     "author": "Sebastian Sille",
-    "version": (1, 3, 0),
+    "version": (1, 3, 1),
     "blender": (4, 0, 0),
     "location": "File > Import",
     "description": "Import My Virtual Rig and General Device Type Format",
@@ -237,6 +237,7 @@ class ExportMVR(Operator, ExportHelper):
         keywords = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob", "check_existing"))
         global_matrix = axis_conversion(to_forward=self.axis_forward, to_up=self.axis_up).to_4x4()
         keywords["global_matrix"] = global_matrix
+        keywords["version"] = __version__
 
         return export_mvr.save(self, context, **keywords)
 
