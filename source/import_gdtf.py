@@ -1491,9 +1491,9 @@ def fixture_build(context, filename, mscale, fixname, position, focus_point, fix
     if model_collection:
         patch = get_fixture_address(fix_id)
         if not fixture:
-            model_collection["GDTF Name"] = name
+            model_collection["GDTF Spec"] = name
         else:
-            model_collection["GDTF Name"] = fixture.gdtf_spec
+            model_collection["GDTF Spec"] = fixture.gdtf_spec
             if len(fixture.addresses):
                 numbers = fixture.addresses[0]
                 patch = numbers.dmx_break, numbers.universe, numbers.address
