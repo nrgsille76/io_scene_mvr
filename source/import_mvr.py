@@ -109,12 +109,15 @@ def check_existing(node, collection):
     return existing
 
 
-def add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path, fixture_idx, layer_idx,
-                    extracted, group_collect, TARGETS, focus_points, fixture_path, fixture_group=None):
+def add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path, fixture_idx, layer_idx, extracted,
+                    group_collect, apply, TARGETS, focus_points, fixture_path, fixture_group=None):
 
     """Add fixture to the scene"""
     fixture_pos = get_matrix(fixture, mscale)
-    fixture_file = os.path.join(folder_path, fixture.gdtf_spec)
+    if fixture.gdtf_spec:
+        fixture_file = os.path.join(folder_path, fixture.gdtf_spec)
+    else:
+        fixture_file = os.path.join(folder_path, "Custom@Fixture.gdtf")
     existing_fixture = os.path.isfile(fixture_file)
     if fixture.fixture_id is not None and len(fixture.fixture_id):
         fixture_id = int(fixture.fixture_id)
@@ -152,11 +155,11 @@ def add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path, fixture_id
         if target_collect:
             group_collect = target_collect
         process_mvr_object(context, mvr_scene, focus_points[0], fixture_idx,
-                           mscale, folder_path, extracted, group_collect)
+                           mscale, apply, folder_path, extracted, group_collect)
 
 
-def get_child_list(context, mscale, mvr_scene, child_list, layer_index, folder_path,
-                   extracted, layer_collection, FIXTURES, TARGETS, fixturepath, fixture_group=None):
+def get_child_list(context, mscale, mvr_scene, child_list, layer_index, folder_path, extracted,
+                   layer_collection, apply, FIXTURES, TARGETS, fixturepath, fixture_group=None):
 
     viewlayer = context.view_layer
     viewport = viewlayer.layer_collection.children.get(layer_collection.name)
@@ -172,23 +175,23 @@ def get_child_list(context, mscale, mvr_scene, child_list, layer_index, folder_p
             fixture_group = FixtureGroup(group_name, truss_obj.uuid)
 
         if not existing:
-            process_mvr_object(context, mvr_scene, truss_obj, truss_idx,
-                               mscale, folder_path, extracted, layer_collection)
+            process_mvr_object(context, mvr_scene, truss_obj, truss_idx, mscale,
+                               apply, folder_path, extracted, layer_collection)
 
         if hasattr(truss_obj, "child_list") and truss_obj.child_list:
             get_child_list(context, mscale, mvr_scene, truss_obj.child_list, truss_idx, folder_path,
-                           extracted, layer_collection, FIXTURES, TARGETS, fixturepath, fixture_group)
+                           extracted, layer_collection, apply, FIXTURES, TARGETS, fixturepath, fixture_group)
 
     for scene_idx, scene_obj in enumerate(child_list.scene_objects):
         existing = check_existing(scene_obj, layer_collection)
 
         if not existing:
-            process_mvr_object(context, mvr_scene, scene_obj, scene_idx,
-                               mscale, folder_path, extracted, layer_collection)
+            process_mvr_object(context, mvr_scene, scene_obj, scene_idx, mscale,
+                               apply, folder_path, extracted, layer_collection)
 
         if hasattr(scene_obj, "child_list") and scene_obj.child_list:
-            get_child_list(context, mscale, mvr_scene, scene_obj.child_list, scene_idx,
-                           folder_path, extracted, layer_collection, FIXTURES, TARGETS, fixturepath)
+            get_child_list(context, mscale, mvr_scene, scene_obj.child_list, scene_idx, folder_path,
+                           extracted, layer_collection, apply, FIXTURES, TARGETS, fixturepath)
 
     if FIXTURES:
         for fixture_idx, fixture in enumerate(child_list.fixtures):
@@ -197,11 +200,11 @@ def get_child_list(context, mscale, mvr_scene, child_list, layer_index, folder_p
                 focus_points.extend([fp for fp in child_list.focus_points if fp.uuid == fixture.focus])
 
             add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path, fixture_idx, layer_index,
-                            extracted, layer_collection, TARGETS, focus_points, fixturepath, fixture_group)
+                            extracted, layer_collection, apply, TARGETS, focus_points, fixturepath, fixture_group)
 
             if hasattr(fixture, "child_list") and fixture.child_list:
                 get_child_list(context, mscale, mvr_scene, fixture.child_list, fixture_idx, folder_path,
-                               extracted, layer_collection, FIXTURES, TARGETS, fixturepath, fixture_group)
+                               extracted, layer_collection, apply, FIXTURES, TARGETS, fixturepath, fixture_group)
 
     for group_idx, group in enumerate(child_list.group_objects):
         if hasattr(group, "child_list") and group.child_list:
@@ -210,13 +213,13 @@ def get_child_list(context, mscale, mvr_scene, child_list, layer_index, folder_p
             group_name =  '%s %d' % (group_name, group_idx) if group_idx >= 1 else group_name
             fixture_group = FixtureGroup(group_name, group.uuid)
             get_child_list(context, mscale, mvr_scene, group.child_list, layergroup_idx, folder_path,
-                           extracted, layer_collection, FIXTURES, TARGETS, fixturepath, fixture_group)
+                           extracted, layer_collection, apply, FIXTURES, TARGETS, fixturepath, fixture_group)
 
     for obj in viewlayer.active_layer_collection.collection.all_objects:
         obj.select_set(True)
 
 
-def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, folder_path, extracted, group_collect):
+def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, apply, folder_path, extracted, group_collect):
 
     uid = mvr_object.uuid
     name = mvr_object.name
@@ -255,7 +258,7 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, folder_p
                     if gltf:
                         bpy.ops.import_scene.gltf(filepath=file_name)
                     else:
-                        load_3ds(file_name, context, KEYFRAME=False, APPLY_MATRIX=False)
+                        load_3ds(file_name, context, KEYFRAME=False, APPLY_MATRIX=apply)
                     imported_objects.extend(list(viewlayer.objects.selected))
             for ob in imported_objects:
                 ob.rotation_mode = 'XYZ'
@@ -263,15 +266,14 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, folder_p
                 create_mvr_props(ob, class_name, obname, uid, mesh_name)
                 if ob.data:
                     ob.data.name = mesh_name
-                    create_mvr_props(ob.data, node_type, obname, uid, item_name) 
+                    create_mvr_props(ob.data, node_type, obname, uid, item_name)
+                    ob.matrix_world = world_matrix @ ob.matrix_world.copy() if (gltf or ob.type != 'MESH') else world_matrix
+                else:
+                    ob.empty_display_size = 0.001
                 if len(ob.users_collection) and ob.name in ob.users_collection[0].objects:
                     ob.users_collection[0].objects.unlink(ob)
                 elif ob.name in layer_collect.collection.objects:
                     active_layer.collection.objects.unlink(ob)
-                if ob.data:
-                    ob.matrix_world = world_matrix @ ob.matrix_world.copy() if (gltf or ob.type != 'MESH') else world_matrix
-                else:
-                    ob.empty_display_size = 0.001
                 create_transform_property(ob)
                 if ob.name not in collect.objects:
                     collect.objects.link(ob)
@@ -400,7 +402,7 @@ def transform_objects(layers, mscale):
             collect_objects(layer.child_list)
 
                    
-def load_mvr(context, filename, fixturepath, mscale=mathutils.Matrix(), FIXTURES=True, TARGETS=True):
+def load_mvr(context, filename, fixturepath, mscale=mathutils.Matrix(), apply=False, FIXTURES=True, TARGETS=True):
 
     symdefs = []
     extracted = {}
@@ -436,12 +438,12 @@ def load_mvr(context, filename, fixturepath, mscale=mathutils.Matrix(), FIXTURES
             aux_collection = data_collect.new(symdef.name)
 
         auxData.setdefault(symdef.uuid, aux_collection)
-        process_mvr_object(context, mvr_scene, symdef, aux_idx,
-                           mscale, folder_path, extracted, aux_collection)
+        process_mvr_object(context, mvr_scene, symdef, aux_idx, mscale,
+                           apply, folder_path, extracted, aux_collection)
 
         if hasattr(symdef, "child_list") and symdef.child_list:
             get_child_list(context, mscale, mvr_scene, symdef.child_list, aux_idx, folder_path,
-                           extracted, aux_collection, FIXTURES, TARGETS, fixturepath)
+                           extracted, aux_collection, apply, FIXTURES, TARGETS, fixturepath)
 
     for layer_idx, layer in enumerate(mvr_layers):
         layer_class = layer.__class__.__name__
@@ -454,7 +456,7 @@ def load_mvr(context, filename, fixturepath, mscale=mathutils.Matrix(), FIXTURES
         group_name = layer.name or "Layer"
         fixture_group = FixtureGroup(group_name, layer.uuid)
         get_child_list(context, mscale, mvr_scene, layer.child_list, layer_idx, folder_path,
-                       extracted, layer_collection, FIXTURES, TARGETS, fixturepath, fixture_group)
+                       extracted, layer_collection, apply, FIXTURES, TARGETS, fixturepath, fixture_group)
 
         if len(layer_collection.all_objects) == 0 and layer_collection.name in layer_collect.children:
             layer_collect.children.unlink(layer_collection)
@@ -519,8 +521,8 @@ def load_mvr(context, filename, fixturepath, mscale=mathutils.Matrix(), FIXTURES
     print("MVR scene loaded in %.4f sec.\n" % (time.time() - start_time))
 
 
-def load(operator, context, files=[], directory="", filepath="", scale_objects=1.0,
-         use_collection=False, use_fixtures=True, use_targets=True, fixture_path="", global_matrix=None):
+def load(operator, context, files=[], directory="", filepath="", scale_objects=1.0, use_collection=False,
+         use_apply_transform=False, use_fixtures=True, use_targets=True, fixture_path="", global_matrix=None):
 
     auxData.clear()
     objectData.clear()
@@ -540,7 +542,8 @@ def load(operator, context, files=[], directory="", filepath="", scale_objects=1
             collection = bpy.data.collections.new(Path(fl.name).stem)
             context.scene.collection.children.link(collection)
             context.view_layer.active_layer_collection = context.view_layer.layer_collection.children[collection.name]
-        load_mvr(context, os.path.join(directory, fl.name), fixture_path, mscale, FIXTURES=use_fixtures, TARGETS=use_targets)
+        load_mvr(context, os.path.join(directory, fl.name), fixture_path, mscale,
+                 use_apply_transform, FIXTURES=use_fixtures, TARGETS=use_targets)
 
     auxData.clear()
     objectData.clear()
