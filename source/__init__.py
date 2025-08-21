@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 __author__ = "Sebastian Sille <nrgsille@gmail.com>"
-__version__ = "1.3.1"
+__version__ = "1.3.2"
 __date__ = "2 Aug 2024"
 
 
@@ -39,7 +39,7 @@ from . import import_gdtf
 bl_info = {
     "name": "Import MVR & GDTF",
     "author": "Sebastian Sille",
-    "version": (1, 3, 1),
+    "version": (1, 3, 2),
     "blender": (4, 0, 0),
     "location": "File > Import",
     "description": "Import My Virtual Rig and General Device Type Format",
@@ -98,6 +98,11 @@ class ImportMVR(Operator, ImportHelper):
     use_collection: BoolProperty(
         name="Collection",
         description="Create a new collection",
+        default=False,
+    )
+    use_apply_transform: BoolProperty(
+        name="Apply Transform",
+        description="Apply matrix transform after import",
         default=False,
     )
     use_fixtures: BoolProperty(
@@ -160,6 +165,9 @@ def import_mvr_transform(layout, operator):
         line.enabled = (operator.use_fixtures == True)
         line.prop(operator, "use_targets")
         line.label(text="", icon='CON_STRETCHTO' if operator.use_targets else 'CON_TRACKTO')
+        line = body.row(align=True)
+        line.prop(operator, "use_apply_transform")
+        line.label(text="", icon='MESH_CUBE' if operator.use_apply_transform else 'MOD_SOLIDIFY')
         body.prop(operator, "axis_forward")
         body.prop(operator, "axis_up")
 
