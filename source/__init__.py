@@ -191,9 +191,9 @@ class ExportMVR(Operator, ExportHelper):
     scale_factor: FloatProperty(
         name="Scale",
         description="Scale factor for all objects",
-        min=0.0, max=1000000.0,
-        soft_min=0.001, soft_max=100000.0,
-        default=1000.0,
+        min=0.0001, max=100000.0,
+        soft_min=0.001, soft_max=10000.0,
+        default=1.0,
         subtype='FACTOR',
     )
     use_selection: BoolProperty(
