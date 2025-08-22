@@ -16,8 +16,10 @@ from pathlib import Path
 from io_scene_3ds.import_3ds import load_3ds
 from .import_gdtf import fixture_build, load_gdtf
 
+
 auxData = {}
 objectData = {}
+objectMVR = {"SceneObject", "Truss"}
 
 
 class FixtureGroup:
@@ -64,22 +66,26 @@ def extract_mvr_object(mvr_scene, extracted, folder_path, file):
             extracted[file] += 1
 
 
-def create_mvr_props(mvr_obj, cls, name="", uid=False, ref=None):
-    mvr_obj['MVR Class'] = cls
+def create_mvr_props(obj, cls, name="", uid=False, ref=None, col=None):
+    obj['MVR Class'] = cls
     if len(name):
-        mvr_obj['MVR Name'] = name
+        obj['MVR Name'] = name
+    if col:
+        obj['Object Class'] = col
     if ref:
-        mvr_obj['Reference'] = ref
+        obj['Reference'] = ref
     if uid:
-        mvr_obj['UUID'] = uid
+        obj['UUID'] = uid
 
 
-def create_transform_property(obj):
+def create_transform_property(obj, collection=None):
     mtx_copy = obj.matrix_world.copy()
     translate = mtx_copy.to_translation()
     rotate = mtx_copy.transposed().to_3x3()
     trans_mtx = rotate[0][:]+rotate[1][:]+rotate[2][:]+translate[:]
     obj['Transform'] = trans_mtx
+    if collection is not None:
+        collection['Transform'] = trans_mtx
 
 
 def get_matrix(obj, mtx):
@@ -263,10 +269,10 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, apply, f
             for ob in imported_objects:
                 ob.rotation_mode = 'XYZ'
                 obname = ob.name.split('.')[0]
-                create_mvr_props(ob, class_name, obname, uid, mesh_name)
+                create_mvr_props(ob, class_name, obname, uid, mesh_name, node_type)
                 if ob.data:
                     ob.data.name = mesh_name
-                    create_mvr_props(ob.data, node_type, obname, uid, item_name)
+                    create_mvr_props(ob.data, class_name, obname, uid, item_name, node_type)
                     ob.matrix_world = world_matrix @ ob.matrix_world.copy() if (gltf or ob.type != 'MESH') else world_matrix
                 else:
                     ob.empty_display_size = 0.001
@@ -296,7 +302,7 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, apply, f
     elif not symdef_id and mvr_object.geometries:
         symbols += mvr_object.geometries.symbol
         geometrys += mvr_object.geometries.geometry3d
-    elif not isinstance(mvr_object, pymvr.SceneObject):
+    elif class_name not in objectMVR:
         symbols += mvr_object.symbol
         geometrys += mvr_object.geometry3d
 
@@ -355,12 +361,12 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, apply, f
             symbol_object = object_data.new(name, None)
             collection.objects.link(symbol_object)
             symbol_object.matrix_world = symbol_mtx
-            create_transform_property(symbol_object)
             symbol_object.empty_display_size = 0.001
             symbol_object.empty_display_type = 'ARROWS'
             symbol_object.instance_type = 'COLLECTION'
             symbol_object.instance_collection = symbol_collect
-            create_mvr_props(symbol_object, symbol_type, name, uid, symbol.uuid)
+            create_transform_property(symbol_object, symbol_collect)
+            create_mvr_props(symbol_object, class_name, name, uid, symbol.uuid, symbol_type)
             create_mvr_props(symbol_collect, symbol_type, name, symbol.uuid, symbol.symdef)
 
     if focus_id:
@@ -384,7 +390,9 @@ def transform_objects(layers, mscale):
             for obj in obj_collect.objects:
                 if obj.parent is None:
                     obj.matrix_world = global_mtx @ obj.matrix_world.copy()
-                create_transform_property(obj)
+                    create_transform_property(obj, obj_collect)
+                else:
+                    create_transform_property(obj)
 
     def collect_objects(childlist):
         for truss in childlist.trusses:
