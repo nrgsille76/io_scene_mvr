@@ -13,7 +13,7 @@ copyright = ["2024 Sebastian Schrand"]
 wheels = [
   "wheels/py_mvr-0.6.0-py3-none-any.whl",
   "wheels/py_gdtf-1.0.4-py3-none-any.whl",
-  "wheels/io_scene_3ds-2.7.6-py3-none-any.whl",
+  "wheels/io_scene_3ds-2.7.8-py3-none-any.whl",
 ]
 
 [permissions]
@@ -29,6 +29,7 @@ paths_exclude_pattern = [
   "*.zip",
   "data.json",
 ]
+
 
 
 
