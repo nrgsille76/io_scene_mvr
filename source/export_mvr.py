@@ -264,6 +264,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                SELECT, IMAGES, FIXTURES, TARGETS, CONVERSE, APPLY_MATRIX, VERSION):
     """Export MVR xml tree."""
 
+    scene_collection = context.scene.collection
     blend_file = Path(bpy.data.filepath).stem
     layers_name = Path(filename).stem
     scene_name = context.scene.name
@@ -512,7 +513,9 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
     items_uid = items.get("UUID")
     is_profile = items.get("Company")
     items_class = items.get("MVR Class")
+    no_objects = len(items.children) == 1 and not items.objects
     items_name = items.get("MVR Name") if items.get("MVR Name") else items.name
+    is_layers = items.name in scene_collection and len(scene_collection.children) == 1
     print("creating %s... %s" % (layers_cls, scene_name))
     print("getting Collections... %s" % scene_name)
     if items_uid:
@@ -527,7 +530,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
     elif items.objects and not items.children:
         print("exporting Layer... %s" % items_name)
         layer_list, file_list = create_scene_object(items, layer_list, file_list, True)
-    elif not items.objects and (len(items.children) == 1 or items == context.scene.collection):
+    elif is_layers or no_objects or items == scene_collection:
         print("exporting Layers... %s" % items_name)
         collect_layers(items, layers, layers_cls, layer_list, file_list)
     elif items.objects:
