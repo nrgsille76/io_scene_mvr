@@ -31,24 +31,25 @@ class FixtureGroup:
         self.uuid = uuid
 
 
-def get_filepath(specs, profiles):
-    file_path = None
-
-    for root, dirs, files in os.walk(profiles):
-        for file in files:
-            if (file == specs) or (file.replace(' ', '_') == specs):
-                file_path = os.path.join(root, file)
-                break
+def get_filepath(spec, assets):
+    """Search for file and create filepath."""
+    filepath = None
+    if spec:
+        file_line = spec.replace(' ','_')
+        file_space = spec.replace('_',' ')
+        for root, dirs, files in os.walk(assets):
+            if spec in files:
+                filepath = os.path.join(root, spec)
+            elif file_line in files:
+                filepath = os.path.join(root, file_line)
+            elif file_space in files:
+                filepath = os.path.join(root, file_space)
             else:
-                file_split = file.split('@')
-                if len(file_split) > 2:
-                    file_name = '@'.join((file_split[0], file_split[1]))
-                    fixture_type = '.'.join((file_name, "gdtf"))
-                    if (fixture_type == specs) or (fixture_type.replace(' ', '_') == specs):
-                        file_path = os.path.join(root, file)
+                for file in files:
+                    if file.split('.')[0] == spec:
+                        filepath = os.path.join(root, file)
                         break
-
-    return file_path
+    return filepath
 
 
 def extract_mvr_textures(mvr_scene, folder_path):
@@ -78,14 +79,26 @@ def create_mvr_props(obj, cls, name="", uid=False, ref=None, col=None):
         obj['UUID'] = uid
 
 
-def create_transform_property(obj, collection=None):
-    mtx_copy = obj.matrix_world.copy()
-    translate = mtx_copy.to_translation()
-    rotate = mtx_copy.transposed().to_3x3()
-    trans_mtx = rotate[0][:]+rotate[1][:]+rotate[2][:]+translate[:]
-    obj['Transform'] = trans_mtx
+def create_transform_property(obj, collection=None, matrix=False):
+    prop = "Transform"
+    if matrix:
+        mtx = obj.matrix.matrix
+        mtx_copy = mtx[0][:3] + mtx[1][:3] + mtx[2][:3] + mtx[3][:3]
+        mtx_prop = [float(val) for val in mtx_copy]
+    else:
+        mtx_copy = obj.matrix_world.copy()
+        mtx_pos = mtx_copy.to_translation()
+        mtx_rot = mtx_copy.transposed().to_3x3()
+        mtx_prop = mtx_rot[0][:] + mtx_rot[1][:] + mtx_rot[2][:] + mtx_pos[:]
+        obj[prop] = mtx_prop
+        obj.id_properties_ensure()
+        mtx_property = obj.id_properties_ui(prop)
+        mtx_property.update(default=mtx_prop)
     if collection is not None:
-        collection['Transform'] = trans_mtx
+        collection[prop] = mtx_prop
+        collection.id_properties_ensure()
+        mtx_property = collection.id_properties_ui(prop)
+        mtx_property.update(default=mtx_prop)
 
 
 def get_matrix(obj, mtx):
@@ -168,6 +181,7 @@ def get_child_list(context, mscale, mvr_scene, child_list, layer_index, folder_p
                    layer_collection, apply, FIXTURES, TARGETS, fixturepath, fixture_group=None):
 
     viewlayer = context.view_layer
+    data_collect = bpy.data.collections
     viewport = viewlayer.layer_collection.children.get(layer_collection.name)
     if viewport is not None:
         viewlayer.active_layer_collection = viewport
@@ -216,10 +230,15 @@ def get_child_list(context, mscale, mvr_scene, child_list, layer_index, folder_p
         if hasattr(group, "child_list") and group.child_list:
             layergroup_idx = f"{layer_index}-{group_idx}"
             group_name = group.name or "Group"
+            group_class = group.__class__.__name__
             group_name =  '%s %d' % (group_name, group_idx) if group_idx >= 1 else group_name
+            group_collection = data_collect.new(group_name)
+            layer_collection.children.link(group_collection)
             fixture_group = FixtureGroup(group_name, group.uuid)
+            create_transform_property(group, group_collection, True)
+            create_mvr_props(group_collection, group_class, group_name, group.uuid, layer_collection.name)
             get_child_list(context, mscale, mvr_scene, group.child_list, layergroup_idx, folder_path,
-                           extracted, layer_collection, apply, FIXTURES, TARGETS, fixturepath, fixture_group)
+                           extracted, group_collection, apply, FIXTURES, TARGETS, fixturepath, fixture_group)
 
     for obj in viewlayer.active_layer_collection.collection.all_objects:
         obj.select_set(True)
@@ -458,6 +477,7 @@ def load_mvr(context, filename, fixturepath, mscale=mathutils.Matrix(), apply=Fa
         layer_collection = next((col for col in data_collect if col.get('UUID') == layer.uuid), False)
         if not layer_collection:
             layer_collection = data_collect.new(layer.name)
+            create_transform_property(layer, layer_collection, True)
             create_mvr_props(layer_collection, layer_class, layer.name, layer.uuid)
             layer_collect.children.link(layer_collection)
 
