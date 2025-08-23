@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 __author__ = "Sebastian Sille <nrgsille@gmail.com>"
-__version__ = "1.3.2"
+__version__ = "1.3.4"
 __date__ = "2 Aug 2024"
 
 
@@ -39,7 +39,7 @@ from . import import_gdtf
 bl_info = {
     "name": "Import MVR & GDTF",
     "author": "Sebastian Sille",
-    "version": (1, 3, 2),
+    "version": (1, 3, 4),
     "blender": (4, 0, 0),
     "location": "File > Import",
     "description": "Import My Virtual Rig and General Device Type Format",
@@ -90,8 +90,8 @@ class ImportMVR(Operator, ImportHelper):
     scale_objects: FloatProperty(
         name="Scale",
         description="Scale factor for all objects",
-        min=0.0, max=10000.0,
-        soft_min=0.0, soft_max=10000.0,
+        min=0.0001, max=10000.0,
+        soft_min=0.001, soft_max=1000.0,
         default=1.0,
         subtype='FACTOR',
     )
@@ -191,8 +191,8 @@ class ExportMVR(Operator, ExportHelper):
     scale_factor: FloatProperty(
         name="Scale",
         description="Scale factor for all objects",
-        min=0.0001, max=100000.0,
-        soft_min=0.001, soft_max=10000.0,
+        min=0.0001, max=10000.0,
+        soft_min=0.001, soft_max=1000.0,
         default=1.0,
         subtype='FACTOR',
     )
