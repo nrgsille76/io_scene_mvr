@@ -3,12 +3,15 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 __author__ = "Sebastian Sille <nrgsille@gmail.com>"
-__version__ = "1.3.4"
+__version__ = "1.3.5"
 __date__ = "2 Aug 2024"
 
 
 import os
 import bpy
+from . import export_mvr
+from . import import_mvr
+from . import import_gdtf
 from bpy_extras.io_utils import (
     ImportHelper,
     ExportHelper,
@@ -31,15 +34,12 @@ from bpy.types import (
     FileHandler,
     AddonPreferences,
 )
-from . import export_mvr
-from . import import_mvr
-from . import import_gdtf
 
 '''
 bl_info = {
     "name": "Import MVR & GDTF",
     "author": "Sebastian Sille",
-    "version": (1, 3, 4),
+    "version": (1, 3, 5),
     "blender": (4, 0, 0),
     "location": "File > Import",
     "description": "Import My Virtual Rig and General Device Type Format",
@@ -102,7 +102,7 @@ class ImportMVR(Operator, ImportHelper):
     )
     use_apply_transform: BoolProperty(
         name="Apply Transform",
-        description="Apply matrix transform after import",
+        description="Apply matrix transform",
         default=False,
     )
     use_fixtures: BoolProperty(
@@ -112,12 +112,12 @@ class ImportMVR(Operator, ImportHelper):
     )
     use_targets: BoolProperty(
         name="Targets",
-        description="Use constraints for targets",
+        description="Use targets for constraints",
         default=True,
     )
     fixture_path: StringProperty(
         name="GDTF File Path",
-        description="Export GDTF profiles from this directory",
+        description="Import GDTF profiles from this directory",
         default="",
     )
 
@@ -203,7 +203,7 @@ class ExportMVR(Operator, ExportHelper):
     )
     use_apply_transform: BoolProperty(
         name="Apply Transform",
-        description="Apply matrix transform before export",
+        description="Apply matrix transform",
         default=False,
     )
     use_images: BoolProperty(
