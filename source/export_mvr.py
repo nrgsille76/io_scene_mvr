@@ -210,31 +210,34 @@ def get_fixture(context, fixture, specs, file_list, folders, scale, SELECT, TARG
     transmtx = Matrix(get_transmatrix(CONVERSE, base))
 
     if target and TARGETS:
+        focus_objects = []
+        geometries = pymvr.Geometries()
         target_uid = target.get("UUID")
         target_name = target.get("Fixture Name")
         focus_name = target_name + " FocusPoint"
         focus_mtx = Matrix(get_transmatrix(CONVERSE, target))
         print("exporting FocusPoint... %s" % focus_name)
-        focus_point = pymvr.FocusPoint(uuid=target_uid, name=focus_name, matrix=focus_mtx).to_xml()
         if target.children and any((ob.type == 'MESH' for ob in target.children_recursive)):
             target_mesh = '.'.join((' '.join((target_name, "Target")), "3ds"))
-            geometries = pymvr.Geometries()
-            focus_objects = []
             for obj in target.children_recursive:
+                if obj.parent == target:
+                    target_mtx = obj.matrix_parent_inverse.copy() @ target.matrix_local.copy()
+                    focus_mtx = Matrix(get_transmatrix(target_mtx, obj))
                 if obj.type == 'MESH':
                     file_list.extend(get_material_images(obj.active_material, folders))
                 if obj.get("Geometry Class") != "Target":
                     focus_objects.append(obj)
-
+        focus_point = pymvr.FocusPoint(uuid=target_uid, name=focus_name, matrix=focus_mtx).to_xml()
+        if len(focus_objects):
             print("exporting Geometry3D... %s" % target_mesh)
             mvr_object = pymvr.Geometry3D(file_name=target_mesh)
             geometries.geometry3d.append(mvr_object)
             file_path = os.path.join(folders, target_mesh)
-            export_3ds(context, file_path, focus_objects, SELECT, APPLY_MATRIX, CONVERSE, scalefactor)
+            export_3ds(context, file_path, focus_objects, SELECT, APPLY_MATRIX, CONVERSE, scale)
             file_list.append((file_path, target_mesh))
             geometries.to_xml(parent=focus_point)
-            geometries.geometry3d.clear()
-            geometries.symbol.clear()
+        geometries.geometry3d.clear()
+        geometries.symbol.clear()
         fix_object = pymvr.Fixture(name=fixture_name, uuid=uid, gdtf_spec=specs, gdtf_mode=fix_mode, matrix=transmtx,
                                    fixture_id=str(fix_id), fixture_id_numeric=fix_id, focus=target_uid)
     else:
@@ -271,7 +274,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
     layer_list = None
     file_list = []
 
-    print("creating Scene... %s" % scene_name)
+    print("creating Scene... %s" % blend_file)
     layers_element = pymvr.LayersElement()
     layers_cls = layers_element.__class__.__name__
     mvr = pymvr.GeneralSceneDescriptionWriter()
@@ -515,7 +518,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
     items_class = items.get("MVR Class")
     no_objects = len(items.children) == 1 and not items.objects
     items_name = items.get("MVR Name") if items.get("MVR Name") else items.name
-    is_layers = items.name in scene_collection and len(scene_collection.children) == 1
+    is_layers = items.name in scene_collection.children and len(scene_collection.children) == 1
     print("creating %s... %s" % (layers_cls, scene_name))
     print("getting Collections... %s" % scene_name)
     if items_uid:
@@ -622,8 +625,6 @@ def save(operator, context, filepath="", collection="", scale_factor=1.0, use_se
          use_targets=True, fixture_path="", global_matrix=None, version=""):
     """Save the MVR file."""
 
-    context.window.cursor_set('WAIT')
-
     if global_matrix is None:
         global_matrix = mathutils.Matrix()
 
@@ -641,7 +642,5 @@ def save(operator, context, filepath="", collection="", scale_factor=1.0, use_se
 
     save_mvr(context, items, filepath, fixture_path, scale_factor, APPLY_MATRIX=use_apply_transform, SELECT=use_selection,
              IMAGES=use_images, FIXTURES=use_fixtures, TARGETS=use_targets, CONVERSE=global_matrix, VERSION=version)
-
-    context.window.cursor_set('DEFAULT')
 
     return {'FINISHED'}
