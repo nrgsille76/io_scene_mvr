@@ -786,6 +786,7 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
     objectDict = {}
     color_channels = set()
     name = create_fixture_name(fixturename)
+    profile_cls = profile.__class__.__name__
     fixturetype_id = profile.fixture_type_id
     collection = bpy.data.collections.new(name)
     dmx_mode = pygdtf.utils.get_dmx_mode_by_name(profile, mode)
@@ -800,6 +801,7 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
 
     collection['UUID'] = uid
     collection['Fixture ID'] = fixture_id
+    collection['Object Class'] = profile_cls
     create_gdtf_props(collection, fixturename)
     dmx_channels = collect_dmx_channels(profile, mode)
     root_geometry = pygdtf.utils.get_geometry_by_name(profile, dmx_mode.geometry)
@@ -1290,6 +1292,7 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
         create_fixture_id(main_target, fixture_id)
         create_gdtf_props(main_target, fixturename)
         main_target['Geometry Type'] = 'Target'
+        main_target['Object Class'] = profile_cls
         main_target['UUID'] = target_id
         targetData[target_id] = main_target
 
@@ -1330,6 +1333,7 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
                         create_fixture_id(obj_target, fixture_id)
                         create_gdtf_props(obj_target, fixturename)
                         obj_target['Geometry Class'] = 'Target'
+                        main_target['Object Class'] = profile_cls
                         obj_target['Reference'] = obj.get('Original Name', obj.name)
                         collection.objects.link(obj_target)
                         if not center_object:
@@ -1474,6 +1478,7 @@ def fixture_build(context, filename, mscale, fixname, position, focus_point, fix
         if fix_id > 0:
             device_name = 'ID%d %s' % (fix_id, device.split('.')[0])
         return device_name
+
 
     # Remove Collection if same index
     index_collection = next((col for col in data_collect if col.get('Fixture ID') == fix_id), False)
