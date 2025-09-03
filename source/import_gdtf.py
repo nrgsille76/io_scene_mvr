@@ -21,16 +21,19 @@ from io_scene_3ds.import_3ds import load_3ds
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
 from pathlib import Path
 
+
 rangeData = {}
 targetData = {}
 channelData = {}
+movingHead = {"Pan", "Tilt"}
+colorMix = {"R", "G", "B", "C", "M", "Y"}
 
 
 class FixtureMode(object):
 
     def __init__(self, profile):
         self._name = next((md.name for md in profile.dmx_modes if
-                           md.name.split(' ')[0] == 'Standard'), 'Standard')
+                           md.name.split(" ")[0] == "Standard"), "Standard")
 
     @property
     def name(self):
@@ -45,6 +48,22 @@ def get_folder_path():
     return os.path.join(folder_path, "assets", "gdtf")
 
 
+def remove_suffix(name):
+    """Remove file suffix from name."""
+    free_name = f"{name}"
+    if (isinstance(name, str) and
+        len(name) >= 5 and name[-5] == "." or
+        len(name) >= 4 and name[-4] == "."
+    ):
+        dot_split = name.split(".")
+        if len(dot_split) > 2:
+            free_name = ".".join(dot_split[:-1])
+        else:
+            free_name = dot_split[0]
+
+    return free_name
+
+
 def cleanup_name(geometry):
     name = geometry.name.replace(" ", "_")
     root_name = ""
@@ -54,13 +73,13 @@ def cleanup_name(geometry):
 
 
 def create_fixture_name(name):
-    if '@' not in name:
+    if "@" not in name:
         return Path(name).stem
-    split_name = name.split('@')
+    split_name = name.split("@")
     if len(split_name) > 2:
         manufacturer = split_name[0]
         fixture_name = split_name[1]
-        clean_name = manufacturer + '@' + fixture_name
+        clean_name = manufacturer + "@" + fixture_name
     elif len(split_name) > 1:
         manufacturer = split_name[0]
         clean_name = Path(split_name[1]).stem
@@ -70,9 +89,9 @@ def create_fixture_name(name):
 
 
 def create_fixture_id(item, fixture_id):
-    item['Fixture ID'] = fixture_id
+    item["Fixture ID"] = fixture_id
     item.id_properties_ensure()
-    item_property = item.id_properties_ui('Fixture ID')
+    item_property = item.id_properties_ui("Fixture ID")
     item_property.update(default=0, min=0, max=4096, soft_min=0, soft_max=4096)
 
 
@@ -85,17 +104,17 @@ def get_fixture_address(fixture_id):
 
 
 def create_gdtf_props(item, name):
-    split_name = name.split('@')
+    split_name = name.split("@")
     if len(split_name) > 2:
-        item['Company'] = split_name[0]
+        item["Company"] = split_name[0]
         fixture_name = split_name[1]
     elif len(split_name) > 1:
-        item['Company'] = split_name[0]
-        fixture_name = split_name[1].split('.')[0]
+        item["Company"] = split_name[0]
+        fixture_name = remove_suffix(split_name[1])
     else:
-        item['Company'] = "Custom"
-        fixture_name = name.split('.')[0]
-    item['Fixture Name'] = fixture_name
+        item["Company"] = "Custom"
+        fixture_name = remove_suffix(name)
+    item["Fixture Name"] = fixture_name
 
 
 def create_dimmer_driver(item, target, power):
@@ -142,7 +161,7 @@ def create_color_driver(item, target, path):
 
 
 def create_ctc_driver(item, target):
-    ctc_node = item.data.node_tree.nodes.get('Color Temperature')
+    ctc_node = item.data.node_tree.nodes.get("Color Temperature")
     ctc_curve = ctc_node.inputs[0].driver_add("default_value")
     ctc_drive = ctc_curve.driver
     ctc_drive.type = 'AVERAGE'
@@ -151,7 +170,7 @@ def create_ctc_driver(item, target):
     ctc_target = ctc_var.targets[0]
     ctc_target.id = target
     ctc_target.use_fallback_value = True
-    ctc_target.fallback_value = item.get('Temperature')
+    ctc_target.fallback_value = item.get("Temperature")
     ctc_target.data_path = '["Light CTC"]'
 
 
@@ -209,16 +228,16 @@ def create_gobo_driver(item, node, target, count):
 
 
 def create_trackball_driver(item, target, prop):
-    range_data = item.get('Range')
+    range_data = item.get("Range")
     min_angle = min(range_data)
     max_angle = max(range_data)
-    check_target = target.get('Target')
-    check_pan = item.get('Mobile Axis') == "Pan"
+    check_target = target.get("Target")
+    check_pan = item.get("Mobile Axis") == "Pan"
     max_val = "max_z" if check_pan else "max_x"
     min_val = "min_z" if check_pan else "min_x"
     path = f'["{prop}"][0]' if check_pan else f'["{prop}"][1]'
-    limit = item.constraints.get('Limit Rotation')
-    lock = item.constraints.get('Locked Track')
+    limit = item.constraints.get("Limit Rotation")
+    lock = item.constraints.get("Locked Track")
     if limit:
         limit.enabled = check_target
         axis_value = limit.max_z if check_pan else limit.max_x
@@ -275,7 +294,7 @@ def create_trackball_driver(item, target, prop):
 
 def create_zoom_driver(item, target, prop):
     if item.id_type == 'LIGHT':
-        if prop == 'Focus Zoom':
+        if prop == "Focus Zoom":
             zoom_curve = item.driver_add("spot_size")
             zoom_drive = zoom_curve.driver
             zoom_drive.type = 'AVERAGE'
@@ -284,8 +303,8 @@ def create_zoom_driver(item, target, prop):
             zoom_target = zoom_var.targets[0]
             zoom_target.id = target
             zoom_target.data_path = f'["{prop}"]'
-        reference = item if prop == 'Focus' else target
-        focus = item.node_tree.nodes.get('Focus Factor')
+        reference = item if prop == "Focus" else target
+        focus = item.node_tree.nodes.get("Focus Factor")
         focus_factor = focus.outputs[0].default_value
         diffuse_factor = item.diffuse_factor
         specular_factor = item.specular_factor
@@ -321,8 +340,8 @@ def create_zoom_driver(item, target, prop):
         focus_target = focus_var.targets[0]
         power_target = power_var.targets[0]
         power_target.id_type = spec_factor.id_type = dif_factor.id_type = vol_factor.id_type = 'LIGHT'
-        focus_target.id_type = spec_angle.id_type = 'LIGHT' if prop == 'Focus' else 'OBJECT'
-        dif_angle.id_type = vol_angle.id_type = 'LIGHT' if prop == 'Focus' else 'OBJECT'
+        focus_target.id_type = spec_angle.id_type = 'LIGHT' if prop == "Focus" else 'OBJECT'
+        dif_angle.id_type = vol_angle.id_type = 'LIGHT' if prop == "Focus" else 'OBJECT'
         focus_target.id = spec_angle.id = dif_angle.id = vol_angle.id = reference
         power_target.id = dif_factor.id = vol_factor.id = spec_factor.id = item
         power_target.use_fallback_value = spec_factor.use_fallback_value = True
@@ -340,7 +359,7 @@ def create_zoom_driver(item, target, prop):
         power_target.data_path = spec_factor.data_path = '["Power"]'
         dif_angle.data_path = vol_angle.data_path = f'["{prop}"]'
         focus_target.data_path = spec_angle.data_path = f'["{prop}"]'
-    elif item.id_type == 'OBJECT' and prop == 'Focus Zoom':
+    elif item.id_type == 'OBJECT' and prop == "Focus Zoom":
         x_curve = item.driver_add("scale", 0)
         y_curve = item.driver_add("scale", 1)
         x_drive = x_curve.driver
@@ -413,18 +432,18 @@ def create_patch_property(item, patch):
 
 
 def create_power_property(item, energy):
-    item['Power'] = energy
+    item["Power"] = energy
     item.id_properties_ensure()
-    dimmer_property = item.id_properties_ui('Power')
+    dimmer_property = item.id_properties_ui("Power")
     dimmer_property.update(default=energy, min=0.0, max=1000000.0, soft_min=0.0, soft_max=100000.0, subtype='POWER')
 
 
 def create_radius_property(item, radius):
     rmin = radius * 0.1
     rnorm = radius * 0.5
-    item['Radius'] = rnorm
+    item["Radius"] = rnorm
     item.id_properties_ensure()
-    radius_property = item.id_properties_ui('Radius')
+    radius_property = item.id_properties_ui("Radius")
     radius_property.update(default=rnorm, min=rmin, max=radius, soft_min=rmin, soft_max=radius, step=0.01, subtype='DISTANCE')
 
 
@@ -451,7 +470,7 @@ def create_trackball_property(item, prop, targets):
     vec = (0.0, 0.0, 1.0)
     item[prop] = vec
     item.id_properties_ensure()
-    item['Trackball'] = not targets
+    item["Trackball"] = not targets
     pt_property = item.id_properties_ui(prop)
     pt_property.update(default=vec, min=-1.0, max=1.0, soft_min=-1.0, soft_max=1.0, precision=8, step=0.00001, subtype='DIRECTION')
 
@@ -476,7 +495,7 @@ def collect_dmx_channels(gdtf_profile, mode):
         if channel.offset is None:
             continue
         channel_break = channel.dmx_break
-        if isinstance(geometry, pygdtf.GeometryReference) and channel.dmx_break == 'Overwrite':
+        if isinstance(geometry, pygdtf.GeometryReference) and channel.dmx_break == "Overwrite":
             if len(geometry.breaks):
                 channel_break = geometry.breaks[0].dmx_break
             else:
@@ -495,20 +514,20 @@ def collect_dmx_channels(gdtf_profile, mode):
             offset_fine = channel.offset[1] + break_addition
         max_offset = max([offset_coarse, offset_fine])
         if len(break_channels) < max_offset:
-            break_channels = break_channels + [{'ID': '', 'Geometry': ''}] * (max_offset - len(break_channels))
-        break_channels[offset_coarse - 1] = {'ID': feature, 'Geometry': geometry.name,
-                                             'Functions': channel.logical_channels[0].channel_functions}
+            break_channels = break_channels + [{"ID": "", "Geometry": ""}] * (max_offset - len(break_channels))
+        break_channels[offset_coarse - 1] = {"ID": feature, "Geometry": geometry.name,
+                                             "Functions": channel.logical_channels[0].channel_functions}
         if offset_fine > 0:
-            break_channels[offset_fine - 1] = {'ID': '+' + feature, 'Geometry': geometry.name,
-                                               'Functions': channel.logical_channels[0].channel_functions}
+            break_channels[offset_fine - 1] = {"ID": "+" + feature, "Geometry": geometry.name,
+                                               "Functions": channel.logical_channels[0].channel_functions}
         dmx_channels[channel_break - 1] = break_channels
-        if feature in {'Pan', 'Tilt'}:
+        if feature in {"Pan", "Tilt"}:
             channelData[geometry.name] = feature
             if len(channel_range) and (channel_range[0] != channel_range[-1]):
                 rangeData.setdefault(geometry.name, []).extend(channel_range)
 
     for index, break_list in enumerate(dmx_channels):
-        dmx_channels[index] = [channel for channel in break_list if channel.get('ID', "") != ""]
+        dmx_channels[index] = [channel for channel in break_list if channel.get("ID", "") != ""]
 
     return dmx_channels
 
@@ -550,15 +569,15 @@ def convert_color(color_cie):
 
 def load_blender_primitive(model):
     primitive = str(model.primitive_type)
-    if primitive == 'Cube':
+    if primitive == "Cube":
         bpy.ops.mesh.primitive_cube_add(size=1.0)
-    elif primitive == 'Pigtail':
+    elif primitive == "Pigtail":
         bpy.ops.mesh.primitive_cube_add(size=1.0)
-    elif primitive == 'Plane':
+    elif primitive == "Plane":
         bpy.ops.mesh.primitive_plane_add(size=1.0)
-    elif primitive == 'Cylinder':
+    elif primitive == "Cylinder":
         bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.5, depth=1.0)
-    elif primitive == 'Sphere':
+    elif primitive == "Sphere":
         bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=16, radius=0.5)
     obj = bpy.context.view_layer.objects.selected[0]
     obj.users_collection[0].objects.unlink(obj)
@@ -582,11 +601,11 @@ def create_iris_nodes(item, root, irisnode, outputnode):
     check_spot = item.id_type == 'LIGHT'
     iris_nodes = item.node_tree.nodes
     iris_links = item.node_tree.links
-    create_dimmer_property(root, 'Iris', 0)
-    add_node = iris_nodes.new('ShaderNodeVectorMath')
+    create_dimmer_property(root, "Iris", 0)
+    add_node = iris_nodes.new("ShaderNodeVectorMath")
     iris_gobo = bpy.data.images.get("open.png", False)
-    scale_node = iris_nodes.new('ShaderNodeVectorMath')
-    center_node = iris_nodes.new('ShaderNodeVectorMath')
+    scale_node = iris_nodes.new("ShaderNodeVectorMath")
+    center_node = iris_nodes.new("ShaderNodeVectorMath")
     cord_output = outputnode.outputs[5] if check_spot else outputnode.outputs[2]
     center_node.inputs[1].default_value[:2] = add_node.inputs[1].default_value[:2] = [0.5] * 2
     outputnode.location = (-1720, 400) if check_spot else (-1440, 160)
@@ -595,9 +614,9 @@ def create_iris_nodes(item, root, irisnode, outputnode):
     add_node.location = (-1160, 150) if check_spot else (-840, 150)
     irisnode.location = (-700, 150) if check_spot else (-300, 150)
     center_node.inputs[1].hide = add_node.inputs[1].hide = True
-    scale_node.label = scale_node.name = 'Iris Size'
-    center_node.label = center_node.name = 'Center'
-    add_node.label = add_node.name = 'Iris Vector'
+    scale_node.label = scale_node.name = "Iris Size"
+    center_node.label = center_node.name = "Center"
+    add_node.label = add_node.name = "Iris Vector"
     center_node.operation = 'SUBTRACT'
     scale_node.operation = 'SCALE'
     add_node.operation = 'ADD'
@@ -611,7 +630,7 @@ def create_iris_nodes(item, root, irisnode, outputnode):
     irisnode.extension = 'EXTEND'
     irisnode.height = 100
     irisnode.width = 140
-    irisnode.label = irisnode.name = 'Iris'
+    irisnode.label = irisnode.name = "Iris"
     iris_links.new(cord_output, center_node.inputs[0])
     iris_links.new(center_node.outputs[0], scale_node.inputs[0])
     iris_links.new(scale_node.outputs[0], add_node.inputs[0])
@@ -650,7 +669,7 @@ def extract_gobos(profile, fid, fixturename, wheels):
             for idx, slot in enumerate(wheel.wheel_slots, 1):
                 media_name = f"{name}_{wheel.name}-{idx:04}.png"
                 media_file = str(slot.media_file_name)
-                name_split = media_file.split('.')
+                name_split = media_file.split(".")
                 if not len(name_split[0]):
                     destination = Path(wheel_path, media_name)
                     destination.write_bytes(open_image.read_bytes())
@@ -675,7 +694,7 @@ def extract_gobos(profile, fid, fixturename, wheels):
                 sequence = bpy.data.images.load(first_gobo)
                 sequence.name = first_name
             sequence.alpha_mode = 'CHANNEL_PACKED'
-            sequence['Count'] = gobo_count - 1
+            sequence["Count"] = gobo_count - 1
             sequence.source = 'SEQUENCE'
             gobo_data[wheel.name] = sequence
     return gobo_data
@@ -708,7 +727,7 @@ def load_2d(profile, name):
         if len(bpy.context.view_layer.objects.selected):
             obj = bpy.context.view_layer.objects.selected[0]
         if obj is not None:
-            obj.name = '2D Symbol'
+            obj.name = "2D Symbol"
             if len(obj.users_collection):
                 obj.users_collection[0].objects.unlink(obj)
             obj.rotation_euler[0] = math.radians(-90)
@@ -725,7 +744,7 @@ def join_parts_apply_transforms(objects):
             join += 1
             bpy.context.view_layer.objects.active = ob
             single = ob
-            if ob.data.get('Model Type') == 'glb':
+            if ob.data.get("Model Type") == "glb":
                 ob.data.transform(mb)
         ob.matrix_basis.identity()
     if join > 0:
@@ -747,7 +766,7 @@ def load_model(profile, name, model):
     folder_path = os.path.join(get_folder_path(), name)
     obj_dimension = mathutils.Vector((model.length, model.width, model.height))
 
-    if model.file.extension.lower() == '3ds':
+    if model.file.extension.lower() == "3ds":
         inside_zip_path = f"models/3ds/{model.file.name}.{model.file.extension}"
         file_name = os.path.join(folder_path, inside_zip_path)
         try:
@@ -776,8 +795,46 @@ def load_model(profile, name, model):
         obj.scale = factor
     if obj.data:
         obj.data.name = model.file.name
-        obj.data['Model Type'] = model.file.extension.lower()
+        obj.data["Model Type"] = model.file.extension.lower()
     return obj
+
+
+def collect_attributes(channels, index, functions, logic=False):
+    has_blend = has_focus = has_gobos = has_iris = zoom_range = False
+    pan_range = tilt_range = None
+    wheels = []
+
+    for channel in channels:
+        if "Gobo" in channel[index]:
+            has_gobos = True
+            if logic:
+                gobo_functions = channel.get(functions)
+                for function in gobo_functions:
+                    wheel_function = str(function.wheel)
+                    if wheel_function != "None" and wheel_function not in wheels:
+                        wheels.append(wheel_function)
+        if "Zoom" in channel[index]:
+            zoom_functions = channel.get(functions)
+            zoom_range = zoom_functions[0].physical_from, zoom_functions[0].physical_to
+        if "Iris" in channel[index]:
+            has_iris = True
+        if not logic:
+            if "Focus" in channel[index]:
+                has_focus = True
+            if "Frost" in channel[index]:
+                has_blend = True
+            if "Pan" in channel[index]:
+                pan_functions = channel.get(functions)
+                pan_range = pan_functions[0].physical_from, pan_functions[0].physical_to
+            if "Tilt" in channel[index]:
+                tilt_functions = channel.get(functions)
+                tilt_range = tilt_functions[0].physical_from, tilt_functions[0].physical_to
+
+
+    if logic:
+        return has_gobos, has_iris, zoom_range
+    else:
+        return has_blend, has_focus, has_iris, zoom_range, wheels
 
 
 def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEAMS, TARGETS, CONES, MODE_NR):
@@ -799,29 +856,24 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
             dmx_mode = profile.dmx_modes[min(MODE_NR, len(profile.dmx_modes)) - 1]
         mode = dmx_mode.name
 
-    collection['UUID'] = uid
-    collection['Fixture ID'] = fixture_id
-    collection['Object Class'] = profile_cls
+    collection["UUID"] = uid
+    collection["Fixture ID"] = fixture_id
+    collection["Object Class"] = profile_cls
     create_gdtf_props(collection, fixturename)
     dmx_channels = collect_dmx_channels(profile, mode)
     root_geometry = pygdtf.utils.get_geometry_by_name(profile, dmx_mode.geometry)
     logical_channels = [channel for break_channels in dmx_channels for channel in break_channels]
     virtual_channels = pygdtf.utils.get_virtual_channels(profile, mode)
 
+    has_gobos, has_iris, zoom_range = collect_attributes(logical_channels, "ID", "Functions", True)
+
     for channel in logical_channels:
-        if 'Color1' in channel['ID']:
-            color_channels.add(channel.get('Geometry'))
-        elif 'Color' in channel['ID']:
-            color_attribute = channel.get('ID')
-            if color_attribute[-1] in {'R','G','B','C','M','Y'}:
-                color_channels.add(channel.get('Geometry'))
-        if 'Gobo' in channel['ID']:
-            has_gobos = True
-        if 'Iris' in channel['ID']:
-            has_iris = True
-        if 'Zoom' in channel['ID']:
-            zoom_function = channel.get('Functions')
-            zoom_range = zoom_function[0].physical_from, zoom_function[0].physical_to
+        if "Color1" in channel["ID"]:
+            color_channels.add(channel.get("Geometry"))
+        elif "Color" in channel["ID"]:
+            color_attribute = channel.get("ID")
+            if color_attribute[-1] in colorMix:
+                color_channels.add(channel.get("Geometry"))
 
 
     def load_geometries(geometry):
@@ -835,8 +887,8 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
         if original_name in color_channels:
             setattr(geometry, "reference_rgb", original_name)
         if geometry_class == 'GeometryBeam':
-            if any(geometry.beam_type.value == x for x in ['None', 'Glow']):
-                geometry_type = 'Glow'
+            if any(geometry.beam_type.value == x for x in ["None", "Glow"]):
+                geometry_type = "Glow"
         for ob in data_objects:
             ob.select_set(False)
 
@@ -851,7 +903,9 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
                     load_geometries(sub_geometry)
 
         if geometry.model is None:
-            model = pygdtf.Model(name=f"{geometry}", length=0.0001, width=0.0001, height=0.0001, primitive_type='Cube')
+            model = pygdtf.Model(name=f"{geometry}", length=0.0001, width=0.0001,
+                                 height=0.0001, primitive_type="Cube")
+
             geometry.model = ""
         else:
             model = copy.deepcopy(pygdtf.utils.get_model_by_name(profile, geometry.model))
@@ -864,29 +918,37 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
         if model.file:
             mesh_name = model.file.name
         primitive = str(model.primitive_type)
-        if primitive[-3:] == '1_1':
+        if primitive[-3:] == "1_1":
             primitive = primitive[:-3]
             model.primitive_type = pygdtf.PrimitiveType(primitive)
 
         # Prefer File first, as some GDTFs have both File and PrimitiveType
-        if primitive == 'Undefined' or (model.file and model.file.name != "" and primitive != 'Pigtail'):
+        if (primitive == "Undefined" or
+            (model.file and
+             model.file.name != "" and
+             primitive != "Pigtail")
+        ):
             obj = data_objects.get(geometry_name)
-            if obj is None or obj.get('Model Name') != mesh_name or obj.get('Fixture ID') != fixture_id:
+            if (obj is None or obj.get("Model Name") != mesh_name or
+                obj.get("Fixture ID") != fixture_id
+            ):
                 geo = data_meshes.get(mesh_name)
-                if geo and geo.get('Model Name') == mesh_name and geo.get('UUID') == fixturetype_id:
+                if (geo and geo.get("Model Name") == mesh_name and
+                    geo.get("UUID") == fixturetype_id
+                ):
                     obj = data_objects.new(geometry_name, geo)
                 else:
                     try:
                         obj = load_model(profile, name, model)
                     except Exception as exc:
                         print("Error importing 3D model: %s" % exc)
-                        model.primitive_type = 'Cube'
+                        model.primitive_type = "Cube"
                         obj = load_blender_primitive(model)
         else:
             primesh = data_meshes.get(primitive)
-            if primesh and primesh.get('UUID') == fixturetype_id:
+            if primesh and primesh.get("UUID") == fixturetype_id:
                 obj = data_objects.new(primitive, primesh)
-            elif primitive in ['Base', 'Conventional', 'Head', 'Yoke']:
+            elif primitive in ["Base", "Conventional", "Head", "Yoke"]:
                 obj = load_gdtf_primitive(model)
                 obj.data.name = primitive
             else:
@@ -896,48 +958,48 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
         # If object was created
         if obj is not None:
             if obj.data:
-                obj_name = obj.name.split('.')[0]
-                if obj.get('UUID') is None:
-                    obj.data['Geometry Class'] = geometry_class
-                    obj.data['Geometry Type'] = geometry_type
-                    obj.data['Original Name'] = obj_name
-                    obj.data['Model Name'] = mesh_name
-                    obj.data['UUID'] = fixturetype_id
+                obj_name = remove_suffix(obj.name)
+                if obj.get("UUID") is None:
+                    obj.data["Geometry Class"] = geometry_class
+                    obj.data["Geometry Type"] = geometry_type
+                    obj.data["Original Name"] = obj_name
+                    obj.data["Model Name"] = mesh_name
+                    obj.data["UUID"] = fixturetype_id
                 if obj.data.materials:
                     for mtl in obj.data.materials:
-                        mtl_name = mtl.name.split('.')[0]
+                        mtl_name = remove_suffix(mtl.name)
                         if geometry_class == "GeometryBeam":
-                            mtl['Fixture ID'] = fixture_id
-                        if obj.get('UUID') is None:
+                            mtl["Fixture ID"] = fixture_id
+                        if obj.get("UUID") is None:
                             create_gdtf_props(mtl, fixturename)
-                            mtl['Original Name'] = mtl_name
-                            mtl['Model Name'] = mesh_name
-                            mtl['UUID'] = fixturetype_id
+                            mtl["Original Name"] = mtl_name
+                            mtl["Model Name"] = mesh_name
+                            mtl["UUID"] = fixturetype_id
             obj.name = geometry_name
             create_fixture_id(obj, fixture_id)
             create_gdtf_props(obj, fixturename)
 
             if geometry_name == cleanup_name(root_geometry):
-                obj['Fixture Mode'] = mode
-                obj['Use Root'] = True
+                obj["Fixture Mode"] = mode
+                obj["Use Root"] = True
                 obj.hide_select = False
             else:
-                obj['Geometry Class'] = geometry_class
-                obj['Geometry Type'] = geometry_type
-                obj['Original Name'] = original_name
+                obj["Geometry Class"] = geometry_class
+                obj["Geometry Type"] = geometry_type
+                obj["Original Name"] = original_name
                 obj.hide_select = True
                 if len(mesh_name):
-                    obj['Model Name'] = mesh_name
+                    obj["Model Name"] = mesh_name
             if isinstance(geometry, pygdtf.GeometryReference):
-                obj['Reference'] = str(geometry.geometry)
-                obj['Geometry Type'] = obj.data.get('Geometry Type')
+                obj["Reference"] = str(geometry.geometry)
+                obj["Geometry Type"] = obj.data.get("Geometry Type")
             elif hasattr(geometry, "reference_root"):
-                obj['Reference'] = getattr(geometry, "reference_root")
-            if str(model.primitive_type) == 'Pigtail':
-                obj['Geometry Type'] = 'Pigtail'
+                obj["Reference"] = getattr(geometry, "reference_root")
+            if str(model.primitive_type) == "Pigtail":
+                obj["Geometry Type"] = "Pigtail"
             objectDict[geometry_name] = obj
             mb = obj.matrix_basis.copy()
-            if obj.data.get('Model Type') == 'glb':
+            if obj.data.get("Model Type") == "glb":
                 obj.data.transform(mb) 
             for cld in obj.children:
                 cld.matrix_local = mb @ cld.matrix_local
@@ -955,17 +1017,17 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
 
     def get_geometry_type_as_string(geometry):
         if isinstance(geometry, pygdtf.GeometryMediaServerCamera):
-            return 'Camera'
+            return "Camera"
         if isinstance(geometry, pygdtf.GeometryBeam):
-            return 'Beam'
+            return "Beam"
         if isinstance(geometry, pygdtf.GeometryLaser):
-            return 'Laser'
+            return "Laser"
         if isinstance(geometry, pygdtf.GeometryAxis):
-            return 'Axis'
+            return "Axis"
         if isinstance(geometry, pygdtf.GeometryReference):
             geometry = pygdtf.utils.get_geometry_by_name(profile, geometry.geometry)
             return get_geometry_type_as_string(geometry)
-        return 'Normal'
+        return "Normal"
 
 
     def create_camera(geometry):
@@ -975,7 +1037,7 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
         camera_data = bpy.data.cameras.get(name=f"{obj_child.name}")
         if camera_data is None:
             camera_data = bpy.data.cameras.new(name=f"{obj_child.name}")
-        camera_object = bpy.data.objects.new('MediaCamera', camera_data)
+        camera_object = bpy.data.objects.new("MediaCamera", camera_data)
         camera_object.hide_select = True
         camera_object.parent = obj_child
         camera_object.matrix_parent_inverse = obj_child.matrix_world.inverted()
@@ -992,35 +1054,35 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
         beam_angle = math.radians(geometry.beam_angle)
         obj_child = objectDict.get(cleanup_name(geometry))
         light_energy = geometry.luminous_flux / pow(max(geometry.beam_angle, 10), 2)
-        childname = obj_child.get('Original Name', obj_child.name.split('.')[0])
-        obj_child['Fixture ID'] = obj_child.data['Fixture ID'] = fixture_id
+        childname = obj_child.get("Original Name", remove_suffix(obj_child.name))
+        obj_child["Fixture ID"] = obj_child.data["Fixture ID"] = fixture_id
         light_power = max(light_energy * 100, 100.0)
-        obj_child.data.name = '%s_Beam' % name
+        obj_child.data.name = "%s_Beam" % name
         if len(obj_child.data.materials):
             beam_mtl = obj_child.data.materials[0]
             beam_color = beam_mtl.diffuse_color[:3]
-            beam_mtl['Fixture ID'] = fixture_id
+            beam_mtl["Fixture ID"] = fixture_id
             if childname in color_channels:
-                beam_mtl['RGB'] = True
-            beam_mtl.name = '%s_Beam' % name
+                beam_mtl["RGB"] = True
+            beam_mtl.name = "%s_Beam" % name
         beamname = f"{lightname}_{childname}"
         if not BEAMS or obj_child is None:
             return
         if fixture_id >= 1:
-            if obj_child.data.get('Fixture ID') != fixture_id:
+            if obj_child.data.get("Fixture ID") != fixture_id:
                 emitter = obj_child.data.copy()
-                emitter['Fixture ID'] = fixture_id
+                emitter["Fixture ID"] = fixture_id
                 obj_child.data = emitter
             beamname = f"ID{fixture_id}_{lightname}_{childname}"
             obj_child.data.name = f"ID{fixture_id}_{name}_Beam"
-            obj_child['Geometry Type'] = obj_child.data['Geometry Type'] = "Beam"
+            obj_child["Geometry Type"] = obj_child.data["Geometry Type"] = "Beam"
             if len(obj_child.data.materials):
                 emit_material = obj_child.data.materials[0]
-                emit_material['Fixture ID'] = fixture_id
+                emit_material["Fixture ID"] = fixture_id
                 emit_material.name = beamname
-        if any(geometry.beam_type.value == x for x in ['None', 'Glow']):
-            glowname = f"ID{fixture_id}_{name}_Glow" if fixture_id >= 1 else '%s_Glow' % name
-            obj_child['Geometry Type'] = obj_child.data['Geometry Type'] = "Glow"
+        if any(geometry.beam_type.value == x for x in ["None", "Glow"]):
+            glowname = f"ID{fixture_id}_{name}_Glow" if fixture_id >= 1 else "%s_Glow" % name
+            obj_child["Geometry Type"] = obj_child.data["Geometry Type"] = "Glow"
             obj_child.data.name = glowname
             if len(obj_child.data.materials):
                 glow_material = obj_child.data.materials[0]
@@ -1028,7 +1090,7 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
             return
         obj_child.visible_shadow = False
         light_data = data_lights.get(beamname)
-        if light_data is None or light_data.get('Fixture Name') != lightname:
+        if light_data is None or light_data.get("Fixture Name") != lightname:
             light_data = data_lights.new(beamname, 'SPOT')
             light_data.use_custom_distance = True
             create_gdtf_props(light_data, fixturename)
@@ -1043,68 +1105,68 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
             light_data.spot_blend = calculate_spot_blend(geometry)
             light_data.shadow_soft_size = geometry.beam_radius * 0.5
             light_data.shadow_buffer_clip_start = 0.02
-            light_data['Fixture ID'] = fixture_id
-            light_data['UUID'] = fixturetype_id
+            light_data["Fixture ID"] = fixture_id
+            light_data["UUID"] = fixturetype_id
             if CONES:
                 light_data.show_cone = True
-        light_object = bpy.data.objects.new('Spot', light_data)
+        light_object = bpy.data.objects.new("Spot", light_data)
         light_object.hide_select = True
         light_object.parent = obj_child
         create_gdtf_props(light_object, fixturename)
-        light_object['Geometry Class'] = geometry.__class__.__name__
-        light_object['Lamp Type'] = light_data['Lamp Type'] = lamp_type
-        light_object['Original Name'] = geometry.name
+        light_object["Geometry Class"] = geometry.__class__.__name__
+        light_object["Lamp Type"] = light_data["Lamp Type"] = lamp_type
+        light_object["Original Name"] = geometry.name
         create_power_property(obj_child, light_power)
         create_power_property(light_object, light_power)
         create_power_property(light_data, light_power)
         create_radius_property(obj_child, geometry.beam_radius)
         create_radius_property(light_object, geometry.beam_radius)
         create_radius_property(light_data, geometry.beam_radius)
-        create_ctc_property(obj_child, ctc, 'Temperature')
-        create_ctc_property(light_object, ctc, 'Temperature')
-        create_ctc_property(light_data, ctc, 'Temperature')
-        if obj_child.get('RGB') or childname in color_channels:
-            light_object['RGB'] = True
+        create_ctc_property(obj_child, ctc, "Temperature")
+        create_ctc_property(light_object, ctc, "Temperature")
+        create_ctc_property(light_data, ctc, "Temperature")
+        if obj_child.get("RGB") or childname in color_channels:
+            light_object["RGB"] = True
         if zoom_range:
-            create_range_property(obj_child, beam_angle, 'Focus', zoom_range)
-            create_range_property(light_object, beam_angle, 'Focus', zoom_range)
-            create_range_property(light_data, beam_angle, 'Focus', zoom_range)
-            create_range_property(obj_child, zoom_range, 'Range')
-            create_range_property(light_object, zoom_range, 'Range')
-            create_range_property(light_data, zoom_range, 'Range')
+            create_range_property(obj_child, beam_angle, "Focus", zoom_range)
+            create_range_property(light_object, beam_angle, "Focus", zoom_range)
+            create_range_property(light_data, beam_angle, "Focus", zoom_range)
+            create_range_property(obj_child, zoom_range, "Range")
+            create_range_property(light_object, zoom_range, "Range")
+            create_range_property(light_data, zoom_range, "Range")
         else:
-            create_range_property(obj_child, beam_angle, 'Focus')
-            create_range_property(light_object, beam_angle, 'Focus')
-            create_range_property(light_data, beam_angle, 'Focus')
+            create_range_property(obj_child, beam_angle, "Focus")
+            create_range_property(light_object, beam_angle, "Focus")
+            create_range_property(light_data, beam_angle, "Focus")
         obj_child.matrix_parent_inverse = light_object.matrix_world.inverted()
         collection.objects.link(light_object)
 
         gobo_radius = 2.2 * 0.01 * math.tan(math.radians(geometry.beam_angle / 2))
         goboGeometry = SimpleNamespace(name=f"Gobo {geometry}", length=gobo_radius, width=gobo_radius,
-                                       height=0, primitive_type='Plane', beam_radius=geometry.beam_radius)
+                                       height=0, primitive_type="Plane", beam_radius=geometry.beam_radius)
 
         if not light_data.use_nodes:
             light_data.use_nodes = True
             nodes = light_data.node_tree.nodes
             links = light_data.node_tree.links
-            emit = nodes.get('Emission')
-            emit.label = emit.name = 'Fixture'
-            light_mix = nodes.new('ShaderNodeMixRGB')
-            gamma_node = nodes.new('ShaderNodeGamma')
-            factor_node = nodes.new('ShaderNodeValue')
-            lightpath = nodes.new('ShaderNodeLightPath')
-            light_normal = nodes.new('ShaderNodeNormal')
+            emit = nodes.get("Emission")
+            emit.label = emit.name = "Fixture"
+            light_mix = nodes.new("ShaderNodeMixRGB")
+            gamma_node = nodes.new("ShaderNodeGamma")
+            factor_node = nodes.new("ShaderNodeValue")
+            lightpath = nodes.new("ShaderNodeLightPath")
+            light_normal = nodes.new("ShaderNodeNormal")
             color_temp = nodes.new('ShaderNodeBlackbody')
-            fresnel_node = nodes.new('ShaderNodeFresnel')
-            light_uv = nodes.new('ShaderNodeNewGeometry')
-            layerweight = nodes.new('ShaderNodeLayerWeight')
-            lightfalloff = nodes.new('ShaderNodeLightFalloff')
-            lightcontrast = nodes.new('ShaderNodeBrightContrast')
-            light_mix.label = light_mix.name = 'Light Mix'
-            light_uv.label = light_uv.name = 'Light Orientation'
-            factor_node.label = factor_node.name = 'Focus Factor'
-            color_temp.label = color_temp.name = 'Color Temperature'
-            lightcontrast.label = lightcontrast.name = 'Light Contrast'
+            fresnel_node = nodes.new("ShaderNodeFresnel")
+            light_uv = nodes.new("ShaderNodeNewGeometry")
+            layerweight = nodes.new("ShaderNodeLayerWeight")
+            lightfalloff = nodes.new("ShaderNodeLightFalloff")
+            lightcontrast = nodes.new("ShaderNodeBrightContrast")
+            light_mix.label = light_mix.name = "Light Mix"
+            light_uv.label = light_uv.name = "Light Orientation"
+            factor_node.label = factor_node.name = "Focus Factor"
+            color_temp.label = color_temp.name = "Color Temperature"
+            lightcontrast.label = lightcontrast.name = "Light Contrast"
             focus_factor = light_power / max(pow(geometry.beam_angle, 2), 1e-09)
             light_mix.blend_type = 'MULTIPLY'
             emit.location = (100, 320)
@@ -1152,9 +1214,9 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
         if cleanup_name(geometry) not in objectDict:
             return
         obj_child = objectDict[cleanup_name(geometry)]
-        if 'Laser' not in obj_child.name.lower():
+        if "Laser" not in obj_child.name.lower():
             obj_child.name = f"Laser {obj_child.name}"
-        obj_child['Diameter'] = geometry.beam_diameter
+        obj_child["Diameter"] = geometry.beam_diameter
         obj_child.visible_shadow = False
         obj_child.rotation_mode = 'XYZ'
 
@@ -1163,14 +1225,14 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
         geometry_class = geometry.__class__.__name__
         goboname = f"ID{fixture_id}_{name}_Gobo" if fixture_id >= 1 else f"{name}_Gobo"
         msh = bpy.data.meshes.get(goboname)
-        if msh and msh.get('Geometry Type') == 'Gobo' and msh.get('UUID') == fixturetype_id:
+        if msh and msh.get("Geometry Type") == "Gobo" and msh.get("UUID") == fixturetype_id:
             obj = bpy.data.objects.new(goboname, msh)
         else:
             obj = load_blender_primitive(goboGeometry)
-            obj.data['UUID'] = fixturetype_id
+            obj.data["UUID"] = fixturetype_id
         create_gdtf_props(obj, fixturename)
-        obj['Geometry Class'] = obj.data['Geometry Class'] = geometry_class     
-        obj['Geometry Type'] = obj.data['Geometry Type'] = 'Gobo'
+        obj["Geometry Class"] = obj.data["Geometry Class"] = geometry_class     
+        obj["Geometry Type"] = obj.data["Geometry Type"] = "Gobo"
         create_radius_property(obj, goboGeometry.beam_radius)
         create_radius_property(obj.data, goboGeometry.beam_radius)
         obj.dimensions = (goboGeometry.length, goboGeometry.width, 0)
@@ -1182,7 +1244,7 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
     def calculate_spot_blend(geometry):
         """Return spot_blend value based on beam_type."""
         beam_type = geometry.beam_type.value
-        if not has_gobos and any(beam_type == x for x in ['Wash', 'Fresnel', 'PC']):
+        if not has_gobos and any(beam_type == x for x in ["Wash", "Fresnel", "PC"]):
             return 1.0
         return 0.0
 
@@ -1205,9 +1267,9 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
         obj_parent = objectDict.get(cleanup_name(parent_geometry))
         obj_child = objectDict.get(cleanup_name(child_geometry))
         if hasattr(parent_geometry, "reference_rgb"):
-            obj_parent['RGB'] = True
+            obj_parent["RGB"] = True
         if hasattr(child_geometry, "reference_rgb"):
-            obj_child['RGB'] = True
+            obj_child["RGB"] = True
         obj_child.parent = obj_parent
         obj_child.matrix_parent_inverse = obj_parent.matrix_world.inverted()
 
@@ -1265,46 +1327,52 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
     def get_axis_objects(attribute):
         axis_objects = []
         for obj in objectDict.values():
-            feature = channelData.get(obj.get('Original Name'))
-            axisrange = rangeData.get(obj.get('Original Name'))
+            feature = channelData.get(obj.get("Original Name"))
+            axisrange = rangeData.get(obj.get("Original Name"))
             if feature == attribute:
-                obj['Mobile Axis'] = feature
-                obj['Geometry Type'] = 'Axis'
-                create_range_property(obj, tuple(axisrange), 'Range')
+                obj["Mobile Axis"] = feature
+                obj["Geometry Type"] = "Axis"
+                create_range_property(obj, tuple(axisrange), "Range")
                 axis_objects.append(obj)
         return axis_objects
 
 
     def check_center_object(obj):
-        return (abs(round(obj.location.x, 1)) == 0.0 and abs(round(obj.location.y, 1)) == 0.0)
+        return (abs(round(obj.location.x, 1)) == 0.0 and
+                abs(round(obj.location.y, 1)) == 0.0)
 
 
-    yokes = get_axis_objects('Pan')
-    heads = get_axis_objects('Tilt')
-    base = next(ob for ob in objectDict.values() if ob.get('Use Root'))
-    moving_objects = [ob for ob in objectDict.values() if ob.get('Geometry Type') == 'Axis']
+    yokes = get_axis_objects("Pan")
+    heads = get_axis_objects("Tilt")
+    base = next(ob for ob in objectDict.values() if ob.get("Use Root"))
+    moving_objects = [ob for ob in objectDict.values() if ob.get("Geometry Type") == "Axis"]
 
     if TARGETS:
         data_objects = bpy.data.objects
-        main_target = bpy.data.objects.new('Target', None)
+        main_target = bpy.data.objects.new("Target", None)
         main_target.empty_display_size = 0.4
         collection.objects.link(main_target)
         create_fixture_id(main_target, fixture_id)
         create_gdtf_props(main_target, fixturename)
-        main_target['Geometry Type'] = 'Target'
-        main_target['Object Class'] = profile_cls
-        main_target['UUID'] = target_id
+        main_target["Geometry Type"] = "Target"
+        main_target["Object Class"] = profile_cls
+        main_target["UUID"] = target_id
         targetData[target_id] = main_target
 
     for idx, obj in enumerate(moving_objects):
         center_object = check_center_object(obj)
-        check_pan = obj.get('Mobile Axis') == 'Pan'
-        check_tilt = obj.get('Mobile Axis') == 'Tilt'
+        check_pan = obj.get("Mobile Axis") == "Pan"
+        check_tilt = obj.get("Mobile Axis") == "Tilt"
         center_parent = obj.parent and check_center_object(obj.parent)
-        check_parent = obj.parent and obj.parent.get('Mobile Axis') in {'Pan', 'Tilt'}
-        check_master = check_parent and obj.parent.parent and obj.parent.parent.get('Mobile Axis') in {'Pan', 'Tilt'}
+        check_parent = obj.parent and obj.parent.get("Mobile Axis") in movingHead
+        check_master = (check_parent and obj.parent.parent and
+                        obj.parent.parent.get("Mobile Axis") in movingHead)
+
         if TARGETS:
-            if not len(base.constraints) and (check_pan and not len(obj.children) or (not check_pan and not heads)):
+            if (not len(base.constraints) and
+                (check_pan and not len(obj.children) or
+                 (not check_pan and not heads))
+            ):
                 track_constraint = base.constraints.new('TRACK_TO')
                 track_constraint.target = main_target
                 continue
@@ -1321,20 +1389,20 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
                 lock_constraint.lock_axis = 'LOCK_Z'
             if center_object and center_parent:
                 lock_constraint.target = main_target
-                obj['Target ID'] = target_id
+                obj["Target ID"] = target_id
             else:
                 if obj.parent and len(obj.parent.children) > 1:
                     if not center_object or (center_object and not center_parent):
-                        target_name = 'Target %s' % obj.name
+                        target_name = "Target %s" % obj.name
                         obj_target = bpy.data.objects.new(target_name, None)
                         obj_target.empty_display_type = 'SINGLE_ARROW'
                         obj_target.empty_display_size = 0.2
                         obj_target.parent = main_target
                         create_fixture_id(obj_target, fixture_id)
                         create_gdtf_props(obj_target, fixturename)
-                        obj_target['Geometry Class'] = 'Target'
-                        main_target['Object Class'] = profile_cls
-                        obj_target['Reference'] = obj.get('Original Name', obj.name)
+                        obj_target["Geometry Class"] = "Target"
+                        main_target["Object Class"] = profile_cls
+                        obj_target["Reference"] = obj.get("Original Name", obj.name)
                         collection.objects.link(obj_target)
                         if not center_object:
                             obj_target.location = (obj.location.x, obj.location.y, 0)
@@ -1342,9 +1410,9 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
                             obj_target.location = (obj.parent.location.x, obj.parent.location.y, 0)
                         lock_constraint.target = obj_target
         limit_constraint = obj.constraints.new('LIMIT_ROTATION')
-        range_min = math.radians(min(rangeData.get(obj.get('Original Name'),(-270, 270))))
+        range_min = math.radians(min(rangeData.get(obj.get("Original Name"),(-270, 270))))
         if check_master:
-            obj['Sub Axis'] = True
+            obj["Sub Axis"] = True
             limit_constraint.owner_space = 'LOCAL'
         if check_tilt:
             limit_constraint.use_limit_x = True
@@ -1359,8 +1427,8 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
     # 2D thumbnail planning symbol
     obj = load_2d(profile, name)
     if obj is not None:
-        obj['2D Symbol'] = "all"
-        objectDict['2D Symbol'] = obj
+        obj["2D Symbol"] = "all"
+        objectDict["2D Symbol"] = obj
         obj.show_in_front = True
         if obj.active_material and obj.active_material.grease_pencil:
             obj.active_material.grease_pencil.show_stroke = True
@@ -1383,18 +1451,299 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
     return collection
 
 
-def get_fixture_models(profile, name, fix_id, uid, target, dmx, BEAMS, TARGETS, CONES, MODE_NR):
-    collections = bpy.data.collections
+def create_beam_features(assembly, blend, focus, iris, gobos, start, gel,
+                         wheels, wheelname, zoom_angle, zoom_range, root_obj):
 
+    """Create the beam effect attributes."""
+    rgb_beam = root_obj.get("RGB Beam")
+    check_color = assembly.get("RGB")
+
+    if assembly.type == 'LIGHT':
+        zoom_angle = assembly.get("Focus")
+        nodes = assembly.data.node_tree.nodes
+        links = assembly.data.node_tree.links
+        gamma_node = nodes.get("Gamma")
+        emit_node = nodes.get("Fixture")
+        light_mix = nodes.get("Light Mix")
+        light_path = nodes.get("Light Path")
+        focus_node = nodes.get("Focus Factor")
+        light_output = nodes.get("Light Output")
+        lightfalloff = nodes.get("Light Falloff")
+        light_uv = nodes.get("Light Orientation")
+        light_temperature = assembly.get("Temperature")
+        lightcontrast = nodes.get("Light Contrast")
+        color_temp = nodes.get("Color Temperature")
+        create_dimmer_driver(assembly.data, root_obj, assembly)
+        if check_color:
+            if rgb_beam is None:
+                create_color_property(root_obj, gel, "RGB Beam")
+            create_color_driver(assembly.data, root_obj, "RGB Beam")
+        if blend:
+            create_factor_driver(assembly, root_obj)
+        if focus:
+            create_focus_driver(assembly, root_obj)
+        if root_obj and light_temperature:
+            create_ctc_property(root_obj, light_temperature, "Light CTC")
+            create_ctc_driver(assembly, root_obj)
+        if zoom_range and zoom_angle:
+            check_zoom = root_obj.get("Focus Zoom", False)
+            if not check_zoom:
+                create_range_property(root_obj, zoom_angle, "Focus Zoom", zoom_range)
+            create_zoom_driver(assembly.data, root_obj, "Focus Zoom")
+        elif zoom_angle:
+            create_zoom_driver(assembly.data, root_obj, "Focus")
+        if iris:
+            assembly.data.use_soft_falloff = False
+            iris_node = nodes.new("ShaderNodeTexImage")
+            iris_out = iris_node
+            if gobos:
+                iris_mix = nodes.new("ShaderNodeMixRGB")
+                links.new(iris_node.outputs[0], iris_mix.inputs[2])
+                links.new(light_path.outputs[7], iris_mix.inputs[0])
+                iris_mix.label = iris_mix.name = "Iris Mix"
+                iris_mix.blend_type = 'DARKEN'
+                iris_mix.location = (-500, 340)
+                iris_out = iris_mix
+            else:
+                assembly.location[2] += 0.01
+            links.new(light_path.outputs[9], lightcontrast.inputs[1])
+            create_iris_nodes(assembly.data, root_obj, iris_node, light_uv)
+            emit_node.location = (300, 300)
+            light_mix.location = (100, 340)
+            color_temp.location = (-100, 200)
+            focus_node.location = (-500, 150)
+            gamma_node.location = (-300, 340)
+            light_output.location = (500, 300)
+            lightfalloff.location = (-300, 220)
+            lightcontrast.location = (-100, 360)
+        if gobos and start is not None:
+            assembly.data.shadow_buffer_clip_start = 0.001
+            assembly.location[2] += 0.01
+            wheel_node = nodes.new("ShaderNodeTexImage")
+            wheel_rota = nodes.new("ShaderNodeVectorRotate")
+            wheel_node.image = start
+            wheel_node.extension = 'EXTEND'
+            wheel_node.label = wheel_node.name = wheelname
+            wheel_rota.label = wheel_rota.name = "%s Rotate" % wheelname
+            wheel_node.color_mapping.blend_type = 'LINEAR_LIGHT'
+            wheel_node.location = (-980, 440)
+            wheel_rota.location = (-1160, 310)
+            emit_node.inputs[0].default_value[:3] = gel[:]
+            create_gobo_driver(wheel_node, wheel_rota, root_obj, gobo_count)
+            links.new(light_uv.outputs[5], wheel_rota.inputs[0])
+            links.new(wheel_rota.outputs[0], wheel_node.inputs[0])
+            links.new(wheel_node.outputs[0], gamma_node.inputs[0])
+            pre_node = wheel_node
+            if wheels:
+                for idx, wheel in enumerate(list(gobo_data.keys())[1:], 2):
+                    start = gobo_data.get(wheel)
+                    gobo_name = "Gobo %d" % idx
+                    align_x = int((idx - 2) * 280)
+                    align_y = int((idx - 2) * -160)
+                    slot_count = start.get("Count")
+                    gobo_mix = nodes.new("ShaderNodeMixRGB")
+                    gobo_node = nodes.new("ShaderNodeTexImage")
+                    rota_node = nodes.new("ShaderNodeVectorRotate")
+                    root_obj["%s Select" % gobo_name] = 0
+                    gobo_node.image = start
+                    gobo_mix.blend_type = 'DARKEN'
+                    gobo_node.extension = 'EXTEND'
+                    gobo_node.color_mapping.blend_type = 'LINEAR_LIGHT'
+                    mix_name = "Gobo %d Mix" % (idx - 1) if idx > 2 else "Gobo Mix"
+                    gobo_mix.label = gobo_mix.name = mix_name
+                    rota_node.label = rota_node.name = "%s Rotate" % gobo_name
+                    gobo_node.label = gobo_node.name = gobo_name
+                    create_gobo_property(root_obj, slot_count, gobo_name)
+                    create_gobo_driver(gobo_node, rota_node, root_obj, slot_count)
+                    gobo_mix.location = (-700 + align_x, 340)
+                    gobo_node.location = (-980 + align_x, 40)
+                    rota_node.location = (-1160, 40 + align_y)
+                    emit_node.location = (300 + align_x, 320) if iris else (100 + align_x, 320)
+                    light_mix.location = (100 + align_x, 360) if iris else (-100 + align_x, 360)
+                    color_temp.location = (-100 + align_x, 220) if iris else (-300 + align_x, 220)
+                    gamma_node.location = (-300 + align_x, 340) if iris else (-500 + align_x, 340)
+                    focus_node.location = (-500 + align_x, 150) if iris else (-300 + align_x, 150)
+                    light_output.location = (500 + align_x, 300) if iris else (300 + align_x, 300)
+                    lightfalloff.location = (-300 + align_x, 220) if iris else (-500 + align_x, 220)
+                    lightcontrast.location = (-100 + align_x, 360) if iris else (-300 + align_x, 360)
+                    if iris:
+                        iris_mix.location = (-500 + align_x, 340)
+                        iris_node.location = (-700 + align_x, 150)
+                    gobo_mix.inputs[1].default_value[:3] = [1.0] * 3
+                    gobo_mix.inputs[2].default_value[:3] = [1.0] * 3
+                    links.new(pre_node.outputs[0], gobo_mix.inputs[1])
+                    links.new(gobo_node.outputs[0], gobo_mix.inputs[2])
+                    links.new(light_uv.outputs[5], rota_node.inputs[0])
+                    links.new(light_path.outputs[7], gobo_mix.inputs[0])
+                    links.new(rota_node.outputs[0], gobo_node.inputs[0])
+                    links.new(gobo_mix.outputs[0], gamma_node.inputs[0])
+                    pre_node = gobo_mix
+        else:
+            gradient_node = nodes.new("ShaderNodeTexGradient")
+            gradient_node.label = gradient_node.name = "Gradient"
+            gradient_node.gradient_type = 'RADIAL'
+            gradient_node.location = (-700, 300)
+            links.new(light_uv.outputs[5], gradient_node.inputs[0])
+            links.new(gradient_node.outputs[0], gamma_node.inputs[0])
+            if assembly.parent and assembly.parent.parent and assembly.parent.parent.dimensions.z < 0.05:
+                assembly.location[2] += -0.02
+        if iris:
+            links.new(iris_out.outputs[0], gamma_node.inputs[0])
+            if gobos:
+                links.new(pre_node.outputs[0], iris_mix.inputs[1])
+    elif assembly.type == 'MESH' and len(assembly.data.materials):
+        if assembly.get("Geometry Type") == "Beam":
+            emit_color = assembly.get("RGB", False)
+            beam_material = assembly.data.materials[0]
+            beam_material.use_nodes = True
+            principled_node = beam_material.node_tree.nodes.get("Principled BSDF")
+            if emit_color:
+                if rgb_beam is None:
+                    create_color_property(root_obj, gel, "RGB Beam")
+                create_color_driver(principled_node.inputs["Emission Color"], root_obj, "RGB Beam")
+            create_dimmer_driver(principled_node.inputs["Emission Strength"], root_obj, assembly)
+        elif assembly.get("Geometry Type") == "Glow":
+            glow_color = assembly.get("RGB", False)
+            glow_material = assembly.data.materials[0]
+            glow_material.use_nodes = True
+            principled_node = glow_material.node_tree.nodes.get("Principled BSDF")
+            if glow_color:
+                create_color_property(root_obj, random_glow, "RGB Glow")
+                create_color_driver(principled_node.inputs["Emission Color"], root_obj, "RGB Glow")
+            create_dimmer_driver(principled_node.inputs["Emission Strength"], root_obj, assembly)   
+        elif assembly.get("Geometry Type") == "Gobo":
+            gobo_material = assembly.data.materials[0]
+            if zoom_range and zoom_angle:
+                check_zoom = root_obj.get("Focus Zoom", False) 
+                if not check_zoom:
+                    create_range_property(root_obj, zoom_angle, "Focus Zoom", zoom_range)
+                create_range_property(assembly, zoom_angle, "Focus", zoom_range)
+                create_zoom_driver(assembly, root_obj, "Focus Zoom")
+            if not gobo_material.use_nodes:
+                gobo_material.use_nodes = True
+                gobo_nodes = gobo_material.node_tree.nodes
+                gobo_links = gobo_material.node_tree.links
+                material_node = gobo_nodes.get("Material Output")
+                principled_bsdf = gobo_nodes.get("Principled BSDF")
+                gobo_nodes.remove(principled_bsdf)
+                gobo_cord = gobo_nodes.new("ShaderNodeTexCoord")
+                gobo_cord.label = gobo_cord.name = "Gobo Coordinate"
+                opacity_node = gobo_nodes.new("ShaderNodeBsdfTransparent")
+                opacity_node.label = opacity_node.name = "Wheel Shader"
+                previous_node = None
+                if gobos:
+                    wheel_node = gobo_nodes.new("ShaderNodeTexImage")
+                    wheel_rota = gobo_nodes.new("ShaderNodeVectorRotate")
+                    wheel_rota.label = wheel_rota.name = "%s Rotate" % wheelname
+                    wheel_node.color_mapping.blend_type = 'LINEAR_LIGHT'
+                    wheel_node.label = wheel_node.name = wheelname
+                    wheel_node.location = (-620, 460)
+                    wheel_rota.location = (-840, 310)
+                    wheel_node.extension = 'EXTEND'
+                    wheel_node.image = start
+                    gobo_links.new(gobo_cord.outputs[0], wheel_rota.inputs[0])
+                    gobo_links.new(wheel_rota.outputs[0], wheel_node.inputs[0])
+                    gobo_links.new(wheel_node.outputs[0], opacity_node.inputs[0])
+                    create_gobo_driver(wheel_node, wheel_rota, root_obj, gobo_count)
+                    previous_node = wheel_node
+                gobo_cord.location = (-1040, 90)
+                opacity_node.location = (100, 300)
+                gobo_links.new(opacity_node.outputs[0], material_node.inputs[0])
+                if wheels:
+                    for idx, wheel in enumerate(list(gobo_data.keys())[1:], 2):
+                        start = gobo_data.get(wheel)
+                        gobo_name = "Gobo %d" % idx
+                        align_x = int((idx - 2) * 280)
+                        align_y = int((idx - 2) * -150)
+                        slot_count = start.get("Count")
+                        gobo_mix = gobo_nodes.new("ShaderNodeMixRGB")
+                        gobo_node = gobo_nodes.new("ShaderNodeTexImage")
+                        rota_node = gobo_nodes.new("ShaderNodeVectorRotate")
+                        light_fall = gobo_nodes.get("Light Falloff", False)
+                        if not light_fall:
+                            light_path = gobo_nodes.new("ShaderNodeLightPath")
+                            light_fall = gobo_nodes.new("ShaderNodeLightFalloff")
+                            light_fall.location = (-840, 460)
+                            light_path.location = (-1040, 460)
+                            gobo_links.new(light_path.outputs[1], light_fall.inputs[0])
+                            gobo_links.new(light_path.outputs[8], light_fall.inputs[1])
+                        gobo_node.color_mapping.blend_type = 'LINEAR_LIGHT'
+                        root_obj["%s Select" % gobo_name] = 0
+                        gobo_mix.blend_type = 'MULTIPLY'
+                        gobo_node.extension = 'EXTEND'
+                        gobo_node.image = start
+                        mix_name = "Gobo %d Mix" % (idx - 1) if idx > 2 else "Gobo Mix"
+                        gobo_mix.label = gobo_mix.name = mix_name
+                        rota_node.label = rota_node.name = "%s Rotate" % gobo_name
+                        gobo_node.label = gobo_node.name = gobo_name
+                        gobo_node.location = (-620 + align_x, 40)
+                        rota_node.location = (-840, 40 + align_y)
+                        opacity_node.location = (100 + align_x, 300)
+                        material_node.location = (300 + align_x, 300)
+                        gobo_mix.location = (-300 + align_x, 340) if iris else (-100 + align_x, 340)
+                        gobo_mix.inputs[1].default_value[:3] = [1.0] * 3
+                        gobo_mix.inputs[2].default_value[:3] = gel[:]
+                        create_gobo_driver(gobo_node, rota_node, root_obj, slot_count)
+                        gobo_links.new(light_fall.outputs[0], gobo_mix.inputs[0])
+                        gobo_links.new(previous_node.outputs[0], gobo_mix.inputs[1])
+                        gobo_links.new(gobo_mix.outputs[0], opacity_node.inputs[0])
+                        gobo_links.new(gobo_cord.outputs[0], rota_node.inputs[0])
+                        gobo_links.new(rota_node.outputs[0], gobo_node.inputs[0])
+                        gobo_links.new(gobo_node.outputs[0], gobo_mix.inputs[2])
+                        previous_node = gobo_mix
+                if iris:
+                    light_fall = gobo_nodes.get("Light Falloff", False)
+                    iris_node = gobo_nodes.new("ShaderNodeTexImage")
+                    if not light_fall:
+                        light_path = gobo_nodes.new("ShaderNodeLightPath")
+                        light_fall = gobo_nodes.new("ShaderNodeLightFalloff")
+                        light_fall.location = (-840, 460)
+                        light_path.location = (-1040, 460)
+                        gobo_links.new(light_path.outputs[1], light_fall.inputs[0])
+                        gobo_links.new(light_path.outputs[8], light_fall.inputs[1])
+                    if previous_node is not None:
+                        iris_mix = gobo_nodes.new("ShaderNodeMixRGB")
+                        iris_mix.label = iris_mix.name = "Iris Mix"
+                        iris_mix.blend_type = 'MULTIPLY'
+                        iris_mix.location = (-100 + max(wheel_count - 2, 0) * 200, 340)
+                        gobo_links.new(iris_node.outputs[0], iris_mix.inputs[2])
+                        gobo_links.new(previous_node.outputs[0], iris_mix.inputs[1])
+                        gobo_links.new(light_fall.outputs[0], iris_mix.inputs[0])
+                    else:
+                        iris_mix = iris_node
+                    create_iris_nodes(gobo_material, root_obj, iris_node, gobo_cord)
+                    if wheels:
+                        iris_mix.location = (-100 + max(wheel_count - 2, 0) * 200, 340)
+                        iris_node.location = (-300 + max(wheel_count - 2, 0) * 200, 150)
+                        opacity_node.location = (100 + max(wheel_count - 2, 0) * 200, 320)
+                        material_node.location = (300 + max(wheel_count - 2, 0) * 200, 300)
+                    gobo_links.new(iris_mix.outputs[0], opacity_node.inputs[0])
+        else:
+            for mtl in assembly.data.materials:
+                obj_name = assembly.get("Fixture Name", assembly.name)
+                split_name = remove_suffix(mtl.name)
+                mtl_name = split_name.split("_")[-1]
+                mtl.name = "%s_%s" % (obj_name, mtl_name)
+
+
+
+def get_fixture_models(profile, name, fix_id, uid, target,
+                       dmx, BEAMS, TARGETS, CONES, MODE_NR):
+
+    collections = bpy.data.collections
     if profile == None:
         return None
 
     new_collection = collections.get(name)
-    if new_collection and len(new_collection.objects) and new_collection.get('Fixture ID') == fix_id:
+    if (new_collection and
+        len(new_collection.objects) and
+        new_collection.get("Fixture ID") == fix_id
+    ):
         print("Getting collection from cache: %s" % name)
         return new_collection
     else:
-        new_collection = build_collection(profile, name, fix_id, uid, target, dmx, BEAMS, TARGETS, CONES, MODE_NR)
+        new_collection = build_collection(profile, name, fix_id, uid, target,
+                                          dmx, BEAMS, TARGETS, CONES, MODE_NR)
         return new_collection
 
 
@@ -1402,7 +1751,7 @@ def get_root_model(model_collection):
     if model_collection is None:
         return None
     for obj in model_collection.objects:
-        if obj.get('Use Root', False):
+        if obj.get("Use Root", False):
             return obj
 
 
@@ -1411,32 +1760,38 @@ def get_tilt(model_collection, channels):
         return None
     for obj in model_collection.objects:
         for channel in channels:
-            if 'Tilt' == channel.get('ID') and channel.get('Geometry') == obj.get('Original Name', 'None'):
+            if ("Tilt" == channel.get("ID") and
+                channel.get("Geometry") ==
+                obj.get("Original Name", "None")
+            ):
                 return obj
 
 
 def get_emit_material(obj, color, fixturename, index, prop):
     obj.hide_select = True
     obj.visible_shadow = False
-    emit_color = obj.get('RGB')
+    emit_color = obj.get("RGB")
     bname = create_fixture_name(fixturename)
-    beamname ='ID%d_%s_%s' % (index, bname, prop) if index >= 1 else '%s_%s' % (bname, prop)
+    beamname ="ID%d_%s_%s" % (index, bname, prop) if index >= 1 else "%s_%s" % (bname, prop)
     if len(obj.data.materials):
         emit_material = obj.data.materials[0]
-        emit_material['Fixture ID'] = index
+        emit_material["Fixture ID"] = index
         emit_material.name = beamname
     else:
         emit_material = bpy.data.materials.get(beamname)
-    if emit_material is None or emit_material.get('Fixture ID') != index or emit_material.get('RGB') != emit_color:
+    if (emit_material is None or
+        emit_material.get("Fixture ID") != index or
+        emit_material.get("RGB") != emit_color
+    ):
         obj.data.materials.clear()
         emit_material = bpy.data.materials.new(beamname)
         obj.data.materials.append(emit_material)
         if emit_color:
-            emit_material['RGB'] = emit_color
+            emit_material["RGB"] = emit_color
     obj.active_material = emit_material
     create_gdtf_props(emit_material, fixturename)
-    emit_material['Fixture ID'] = index
-    emit_material['Geometry Type'] = 'Beam'
+    emit_material["Fixture ID"] = index
+    emit_material["Geometry Type"] = "Beam"
     emit_shader = PrincipledBSDFWrapper(emit_material, is_readonly=False, use_nodes=True)
     emit_shader.emission_strength = 1.0
     emit_shader.emission_color = color[:] if emit_color else emit_shader.base_color[:]
@@ -1451,13 +1806,10 @@ def fixture_build(context, filename, mscale, fixname, position, focus_point, fix
     data_collect = bpy.data.collections
     layer_collect = viewlayer.layer_collection
     gdtf_profile = pygdtf.FixtureType(filename)
-    has_focus = has_iris = zoom_range = False
     uid = gdtf_profile.fixture_type_id
-    gobo_material = random_gobo = None
-    has_gobos = has_blend = False
-    color_controller = set()
+    has_gobos =  False
+    random_gobo = None
     channels = []
-    wheels = []
 
     if fixture:
         color = convert_color(gelcolor)
@@ -1476,23 +1828,25 @@ def fixture_build(context, filename, mscale, fixname, position, focus_point, fix
     def index_name(device):
         device_name = device
         if fix_id > 0:
-            device_name = 'ID%d %s' % (fix_id, device.split('.')[0])
+            device_name = "ID%d %s" % (fix_id, remove_suffix(device))
         return device_name
 
 
     # Remove Collection if same index
-    index_collection = next((col for col in data_collect if col.get('Fixture ID') == fix_id), False)
+    index_collection = next((col for col in data_collect if col.get("Fixture ID") == fix_id), False)
     if index_collection:
         for obj in index_collection.objects:
-            if obj.get('Use Root'):
+            if obj.get("Use Root"):
                 position = obj.matrix_world.copy()
-            if obj.get('Geometry Type') == 'Target':
+            if obj.get("Geometry Type") == "Target":
                 focus_point = obj.matrix_world.copy()
             object_data.remove(obj)
         data_collect.remove(index_collection)
 
     # Import Fixture Model Collection
-    model_collection = get_fixture_models(gdtf_profile, name, fix_id, uid, target_id, mode, BEAMS, TARGETS, CONES, MODE_NR)
+    model_collection = get_fixture_models(gdtf_profile, name, fix_id, uid, target_id,
+                                          mode, BEAMS, TARGETS, CONES, MODE_NR)
+
     if model_collection:
         patch = get_fixture_address(fix_id)
         if not fixture:
@@ -1519,67 +1873,13 @@ def fixture_build(context, filename, mscale, fixname, position, focus_point, fix
     channels += [channel for break_channels in dmx_channels for channel in break_channels]
     virtual_channels = pygdtf.utils.get_virtual_channels(gdtf_profile, mode)
 
-    for channel in channels:
-        if 'Color1' in channel['ID']:
-            color_controller.add(channel.get('Geometry'))
-        elif 'Color' in channel['ID']:
-            color_attribute = channel.get('ID')
-            if color_attribute[-1] in {'R','G','B','C','M','Y'}:
-                color_controller.add(channel.get('Geometry'))
-        if 'Gobo' in channel['ID']:
-            gobo_functions = channel.get('Functions')
-            for function in gobo_functions:
-                wheel_function = str(function.wheel)
-                if wheel_function != 'None' and wheel_function not in wheels:
-                    wheels.append(wheel_function)
-        if 'Focus' in channel['ID']:
-            has_focus = True
-        if 'Frost' in channel['ID']:
-            has_blend = True
-        if 'Iris' in channel['ID']:
-            has_iris = True
-        if 'Pan' in channel['ID']:
-            pan_functions = channel.get('Functions')
-            pan_range = pan_functions[0].physical_from, pan_functions[0].physical_to
-        if 'Tilt' in channel['ID']:
-            tilt_functions = channel.get('Functions')
-            tilt_range = tilt_functions[0].physical_from, tilt_functions[0].physical_to
-        if 'Zoom' in channel['ID']:
-            zoom_functions = channel.get('Functions')
-            zoom_range = zoom_functions[0].physical_from, zoom_functions[0].physical_to
-
-    for virtual in virtual_channels:
-        if 'Color1' in virtual['id']:
-            color_controller.add(channel.get('Geometry'))
-        elif 'Color' in virtual['id']:
-            color_attribute = virtual.get('id')
-            if color_attribute[-1] in {'R','G','B','C','M','Y'}:
-                color_controller.add(virtual.get('Geometry'))
-        if 'Gobo' in virtual['id']:
-            gobo_functions = virtual.get('channel_functions')
-            for function in gobo_functions:
-                wheel_function = str(function.wheel)
-                if wheel_function != 'None' and wheel_function not in wheels:
-                    wheels.append(wheel_function)
-        if 'Focus' in virtual['id']:
-            has_focus = True
-        if 'Frost' in virtual['id']:
-            has_blend = True
-        if 'Iris' in virtual['id']:
-            has_iris = True
-        if 'Pan' in virtual['id']:
-            pan_functions = virtual.get('channel_functions')
-            pan_range = pan_functions[0].physical_from, pan_functions[0].physical_to
-        if 'Tilt' in virtual['id']:
-            tilt_functions = virtual.get('channel_functions')
-            tilt_range = tilt_functions[0].physical_from, tilt_functions[0].physical_to
-        if 'Zoom' in virtual['id']:
-            zoom_functions = virtual.get('channel_functions')
-            zoom_range = zoom_functions[0].physical_from, zoom_functions[0].physical_to
+    has_blend, has_focus, has_iris, zoom_range, wheels = collect_attributes(virtual_channels, "id", "channel_functions")
+    has_blend, has_focus, has_iris, zoom_range, wheels = collect_attributes(channels, "ID", "Functions")
 
     linkDict = {}
+    wheel_name = ""
     start_gobo = None
-    wheel_count = False
+    check_wheels = wheel_count = False
     base = get_root_model(model_collection)
     head = get_tilt(model_collection, channels)
     random_glow = [random.uniform(0.0, 1.0) for _ in range(3)]
@@ -1589,17 +1889,17 @@ def fixture_build(context, filename, mscale, fixname, position, focus_point, fix
         wheel_count = len(gobo_data.keys())
         check_wheels = wheel_count > 1
         start_gobo = gobo_data.get(wheels[0])
-        gobo_count = start_gobo.get('Count')
-        wheel_name = 'Gobo 1' if check_wheels else 'Gobo'
+        gobo_count = start_gobo.get("Count")
+        wheel_name = "Gobo 1" if check_wheels else "Gobo"
         random_gobo = random.randint(0, gobo_count)
     elif has_iris:
         check_wheels = False
-        wheel_name = 'Iris'
+        wheel_name = "Iris"
 
     if model_collection:
         root_object = None
         zoom_angle = False
-        collection_name = model_collection.get('Fixture Name')
+        collection_name = model_collection.get("Fixture Name")
         if collect is None:
             if model_collection.name not in layer_collect.collection.children:
                 layer_collect.collection.children.link(model_collection)
@@ -1609,377 +1909,117 @@ def fixture_build(context, filename, mscale, fixname, position, focus_point, fix
             linkDict[obj.name] = obj
             viewlayer.objects.active = obj
             if TARGETS and len(obj.constraints):
-                target = obj.get('Target ID')
-                locked = obj.constraints.get('Locked Track')
+                target = obj.get("Target ID")
+                locked = obj.constraints.get("Locked Track")
                 if locked is not None:
                     for child in obj.children:
-                        locked_child = child.constraints.get('Locked Track')
+                        locked_child = child.constraints.get("Locked Track")
                         if locked_child and locked_child.target is None:
                             locked_child.target = obj.constraints[0].target
                     if target is not None:
                         locked.target = targetData.get(target)
             if obj.type == 'LIGHT':
                 obj.hide_select = True
-                zoom_angle = obj.get('Focus')
+                zoom_angle = obj.get("Focus")
                 obj.matrix_world = obj.matrix_world @ obj.parent.matrix_local.inverted()
-                obj['UUID'] = uid
-            if obj.get('Use Root'):
+                obj["UUID"] = uid
+            if obj.get("Use Root"):
                 root_object = obj
                 if has_blend:
-                    create_factor_property(obj, 'Frost Edge')
+                    create_factor_property(obj, "Frost Edge")
                 if has_focus:
-                    create_factor_property(obj, 'Focus Factor', 0.5)
+                    create_factor_property(obj, "Focus Factor", 0.5)
                 if has_gobos:
-                    obj['%s Select' % wheel_name] = random_gobo
+                    obj["%s Select" % wheel_name] = random_gobo
                     create_gobo_property(obj, gobo_count, wheel_name)
-                create_dimmer_property(obj, 'Intensity')
-                obj['Target'] = TARGETS
+                create_dimmer_property(obj, "Intensity")
+                obj["Target"] = TARGETS
                 obj.id_properties_ensure()
-                target_property = obj.id_properties_ui('Target')
+                target_property = obj.id_properties_ui("Target")
                 target_property.update(default=TARGETS)
-                ob_name = fixture_name.replace('@', '-')
+                ob_name = fixture_name.replace("@", "-")
                 obj.matrix_world = position @ obj.matrix_world.copy()
                 obj.name = index_name(ob_name)
-                obj['UUID'] = uid
-            elif obj.get('Geometry Type') == 'Gobo':
+                obj["UUID"] = uid
+            elif obj.get("Geometry Type") == "Gobo":
                 obj.select_set(False)
                 obj.scale = [1.0] * 3
                 obj.hide_select = True
-                fix_name = fixture_name.replace('@', '-')
-                wheelname = 'ID%d_%s_Wheel' % (fix_id, fix_name) if fix_id >= 1 else '%s_Wheel' % fix_name
+                fix_name = fixture_name.replace("@", "-")
+                wheelname = "ID%d_%s_Wheel" % (fix_id, fix_name) if fix_id >= 1 else "%s_Wheel" % fix_name
                 if len(obj.data.materials):
                     wheel_material = obj.data.materials[0]
-                    wheel_material.name = wheelname
+                    wheel_material.name = wheel_name
                 else:
                     wheel_material = bpy.data.materials.get(wheelname)
-                if wheel_material is None or wheel_material.get('Fixture ID') != fix_id:
+                if wheel_material is None or wheel_material.get("Fixture ID") != fix_id:
                     wheel_material = bpy.data.materials.new(wheelname)
                     obj.data.materials.append(wheel_material)
                 obj.active_material = wheel_material
                 create_gdtf_props(wheel_material, name)
-                wheel_material['Geometry Type'] = 'Gobo'
-                wheel_material['Fixture ID'] = fix_id
-                wheel_material['UUID'] = uid
+                wheel_material["Geometry Type"] = "Gobo"
+                wheel_material["Fixture ID"] = fix_id
+                wheel_material["UUID"] = uid
                 wheel_material.blend_method = 'BLEND'
-            elif obj.get('Geometry Type') == 'Beam' and obj.type == 'MESH':
-                get_emit_material(obj, gelcolor, fixture_name, fix_id, 'Beam')
-            elif obj.get('Geometry Type') == 'Glow' and obj.type == 'MESH':
-                get_emit_material(obj, gelcolor, fixture_name, fix_id, 'Glow')
-            elif obj.get('Geometry Type') == 'Target':
+            elif obj.get("Geometry Type") == "Beam" and obj.type == 'MESH':
+                get_emit_material(obj, gelcolor, fixture_name, fix_id, "Beam")
+            elif obj.get("Geometry Type") == "Glow" and obj.type == 'MESH':
+                get_emit_material(obj, gelcolor, fixture_name, fix_id, "Glow")
+            elif obj.get("Geometry Type") == "Target":
                 obj.name = index_name(obj.name)
                 obj.matrix_world = focus_point
-            elif obj.get('2D Symbol', None) == "all":
-                obj.name = index_name('2D Symbol')
+            elif obj.get("2D Symbol", None) == "all":
+                obj.name = index_name("2D Symbol")
                 obj.hide_viewport = True
                 obj.hide_render = True
                 obj.hide_set(True)
 
         for obj in model_collection.objects:
-            check_color = obj.get('RGB')
-            rgb_beam = root_object.get('RGB Beam')
+            check_color = obj.get("RGB")
+            rgb_beam = root_object.get("RGB Beam")
             for child in obj.children:
                 if child.name in linkDict:
                     linkDict[child.name].parent = obj
                     if check_color:
-                        linkDict[child.name]['RGB'] = True
+                        linkDict[child.name]["RGB"] = True
                 child.name = index_name(child.name)
-            if obj.type == 'LIGHT':
-                zoom_angle = obj.get('Focus')
-                nodes = obj.data.node_tree.nodes
-                links = obj.data.node_tree.links
-                gamma_node = nodes.get('Gamma')
-                emit_node = nodes.get('Fixture')
-                light_mix = nodes.get('Light Mix')
-                light_path = nodes.get('Light Path')
-                focus_node = nodes.get('Focus Factor')
-                light_output = nodes.get('Light Output')
-                lightfalloff = nodes.get('Light Falloff')
-                light_uv = nodes.get('Light Orientation')
-                light_temperature = obj.get('Temperature')
-                lightcontrast = nodes.get('Light Contrast')
-                color_temp = nodes.get('Color Temperature')
-                create_dimmer_driver(obj.data, root_object, obj)
-                if check_color:
-                    if rgb_beam is None:
-                        create_color_property(root_object, gelcolor, 'RGB Beam')
-                    create_color_driver(obj.data, root_object, 'RGB Beam')
-                if has_blend:
-                    create_factor_driver(obj, root_object)
-                if has_focus:
-                    create_focus_driver(obj, root_object)
-                if root_object and light_temperature:
-                    create_ctc_property(root_object, light_temperature, 'Light CTC')
-                    create_ctc_driver(obj, root_object)
-                if zoom_range and zoom_angle:
-                    check_zoom = root_object.get('Focus Zoom', False)
-                    if not check_zoom:
-                        create_range_property(root_object, zoom_angle, 'Focus Zoom', zoom_range)
-                    create_zoom_driver(obj.data, root_object, 'Focus Zoom')
-                elif zoom_angle:
-                    create_zoom_driver(obj.data, root_object, 'Focus')
-                if has_iris:
-                    obj.data.use_soft_falloff = False
-                    iris_node = nodes.new('ShaderNodeTexImage')
-                    iris_out = iris_node
-                    if has_gobos:
-                        iris_mix = nodes.new('ShaderNodeMixRGB')
-                        links.new(iris_node.outputs[0], iris_mix.inputs[2])
-                        links.new(light_path.outputs[7], iris_mix.inputs[0])
-                        iris_mix.label = iris_mix.name = 'Iris Mix'
-                        iris_mix.blend_type = 'DARKEN'
-                        iris_mix.location = (-500, 340)
-                        iris_out = iris_mix
-                    else:
-                        obj.location[2] += 0.01
-                    links.new(light_path.outputs[9], lightcontrast.inputs[1])
-                    create_iris_nodes(obj.data, root_object, iris_node, light_uv)
-                    emit_node.location = (300, 300)
-                    light_mix.location = (100, 340)
-                    color_temp.location = (-100, 200)
-                    focus_node.location = (-500, 150)
-                    gamma_node.location = (-300, 340)
-                    light_output.location = (500, 300)
-                    lightfalloff.location = (-300, 220)
-                    lightcontrast.location = (-100, 360)
-                if has_gobos and start_gobo is not None:
-                    obj.data.shadow_buffer_clip_start = 0.001
-                    obj.location[2] += 0.01
-                    wheel_node = nodes.new('ShaderNodeTexImage')
-                    wheel_rota = nodes.new('ShaderNodeVectorRotate')
-                    wheel_node.image = start_gobo
-                    wheel_node.extension = 'EXTEND'
-                    wheel_node.label = wheel_node.name = wheel_name
-                    wheel_rota.label = wheel_rota.name = '%s Rotate' % wheel_name
-                    wheel_node.color_mapping.blend_type = 'LINEAR_LIGHT'
-                    wheel_node.location = (-980, 440)
-                    wheel_rota.location = (-1160, 310)
-                    emit_node.inputs[0].default_value[:3] = gelcolor[:]
-                    create_gobo_driver(wheel_node, wheel_rota, root_object, gobo_count)
-                    links.new(light_uv.outputs[5], wheel_rota.inputs[0])
-                    links.new(wheel_rota.outputs[0], wheel_node.inputs[0])
-                    links.new(wheel_node.outputs[0], gamma_node.inputs[0])
-                    pre_node = wheel_node
-                    if check_wheels:
-                        for idx, wheel in enumerate(list(gobo_data.keys())[1:], 2):
-                            start = gobo_data.get(wheel)
-                            gobo_name = 'Gobo %d' % idx
-                            align_x = int((idx - 2) * 280)
-                            align_y = int((idx - 2) * -160)
-                            slot_count = start.get('Count')
-                            gobo_mix = nodes.new('ShaderNodeMixRGB')
-                            gobo_node = nodes.new('ShaderNodeTexImage')
-                            rota_node = nodes.new('ShaderNodeVectorRotate')
-                            root_object['%s Select' % gobo_name] = 0
-                            gobo_node.image = start
-                            gobo_mix.blend_type = 'DARKEN'
-                            gobo_node.extension = 'EXTEND'
-                            gobo_node.color_mapping.blend_type = 'LINEAR_LIGHT'
-                            mix_name = 'Gobo %d Mix' % (idx - 1) if idx > 2 else 'Gobo Mix'
-                            gobo_mix.label = gobo_mix.name = mix_name
-                            rota_node.label = rota_node.name = '%s Rotate' % gobo_name
-                            gobo_node.label = gobo_node.name = gobo_name
-                            create_gobo_property(root_object, slot_count, gobo_name)
-                            create_gobo_driver(gobo_node, rota_node, root_object, slot_count)
-                            gobo_mix.location = (-700 + align_x, 340)
-                            gobo_node.location = (-980 + align_x, 40)
-                            rota_node.location = (-1160, 40 + align_y)
-                            emit_node.location = (300 + align_x, 320) if has_iris else (100 + align_x, 320)
-                            light_mix.location = (100 + align_x, 360) if has_iris else (-100 + align_x, 360)
-                            color_temp.location = (-100 + align_x, 220) if has_iris else (-300 + align_x, 220)
-                            gamma_node.location = (-300 + align_x, 340) if has_iris else (-500 + align_x, 340)
-                            focus_node.location = (-500 + align_x, 150) if has_iris else (-300 + align_x, 150)
-                            light_output.location = (500 + align_x, 300) if has_iris else (300 + align_x, 300)
-                            lightfalloff.location = (-300 + align_x, 220) if has_iris else (-500 + align_x, 220)
-                            lightcontrast.location = (-100 + align_x, 360) if has_iris else (-300 + align_x, 360)
-                            if has_iris:
-                                iris_mix.location = (-500 + align_x, 340)
-                                iris_node.location = (-700 + align_x, 150)
-                            gobo_mix.inputs[1].default_value[:3] = [1.0] * 3
-                            gobo_mix.inputs[2].default_value[:3] = [1.0] * 3
-                            links.new(pre_node.outputs[0], gobo_mix.inputs[1])
-                            links.new(gobo_node.outputs[0], gobo_mix.inputs[2])
-                            links.new(light_uv.outputs[5], rota_node.inputs[0])
-                            links.new(light_path.outputs[7], gobo_mix.inputs[0])
-                            links.new(rota_node.outputs[0], gobo_node.inputs[0])
-                            links.new(gobo_mix.outputs[0], gamma_node.inputs[0])
-                            pre_node = gobo_mix
-                else:
-                    gradient_node = nodes.new('ShaderNodeTexGradient')
-                    gradient_node.label = gradient_node.name = 'Gradient'
-                    gradient_node.gradient_type = 'RADIAL'
-                    gradient_node.location = (-700, 300)
-                    links.new(light_uv.outputs[5], gradient_node.inputs[0])
-                    links.new(gradient_node.outputs[0], gamma_node.inputs[0])
-                    if obj.parent and obj.parent.parent and obj.parent.parent.dimensions.z < 0.05:
-                        obj.location[2] += -0.02
-                if has_iris:
-                    links.new(iris_out.outputs[0], gamma_node.inputs[0])
-                    if has_gobos:
-                        links.new(pre_node.outputs[0], iris_mix.inputs[1])
-            elif obj.type == 'MESH' and len(obj.data.materials):
-                if obj.get('Geometry Type') == 'Beam':
-                    emit_color = obj.get('RGB', False)
-                    beam_material = obj.data.materials[0]
-                    beam_material.use_nodes = True
-                    principled_node = beam_material.node_tree.nodes.get('Principled BSDF')
-                    if emit_color:
-                        if rgb_beam is None:
-                            create_color_property(root_object, gelcolor, 'RGB Beam')
-                        create_color_driver(principled_node.inputs['Emission Color'], root_object, 'RGB Beam')
-                    create_dimmer_driver(principled_node.inputs['Emission Strength'], root_object, obj)
-                elif obj.get('Geometry Type') == 'Glow':
-                    glow_color = obj.get('RGB', False)
-                    glow_material = obj.data.materials[0]
-                    glow_material.use_nodes = True
-                    principled_node = glow_material.node_tree.nodes.get('Principled BSDF')
-                    if glow_color:
-                        create_color_property(root_object, random_glow, 'RGB Glow')
-                        create_color_driver(principled_node.inputs['Emission Color'], root_object, 'RGB Glow')
-                    create_dimmer_driver(principled_node.inputs['Emission Strength'], root_object, obj)   
-                elif obj.get('Geometry Type') == 'Gobo':
-                    gobo_material = obj.data.materials[0]
-                    if zoom_range and zoom_angle:
-                        check_zoom = root_object.get('Focus Zoom', False) 
-                        if not check_zoom:
-                            create_range_property(root_object, zoom_angle, 'Focus Zoom', zoom_range)
-                        create_range_property(obj, zoom_angle, 'Focus', zoom_range)
-                        create_zoom_driver(obj, root_object, 'Focus Zoom')
-                    if not gobo_material.use_nodes:
-                        gobo_material.use_nodes = True
-                        gobo_nodes = gobo_material.node_tree.nodes
-                        gobo_links = gobo_material.node_tree.links
-                        material_node = gobo_nodes.get('Material Output')
-                        principled_bsdf = gobo_nodes.get('Principled BSDF')
-                        gobo_nodes.remove(principled_bsdf)
-                        gobo_cord = gobo_nodes.new('ShaderNodeTexCoord')
-                        gobo_cord.label = gobo_cord.name = 'Gobo Coordinate'
-                        opacity_node = gobo_nodes.new('ShaderNodeBsdfTransparent')
-                        opacity_node.label = opacity_node.name = 'Wheel Shader'
-                        previous_node = None
-                        if has_gobos:
-                            wheel_node = gobo_nodes.new('ShaderNodeTexImage')
-                            wheel_rota = gobo_nodes.new('ShaderNodeVectorRotate')
-                            wheel_rota.label = wheel_rota.name = '%s Rotate' % wheel_name
-                            wheel_node.color_mapping.blend_type = 'LINEAR_LIGHT'
-                            wheel_node.label = wheel_node.name = wheel_name
-                            wheel_node.location = (-620, 460)
-                            wheel_rota.location = (-840, 310)
-                            wheel_node.extension = 'EXTEND'
-                            wheel_node.image = start_gobo
-                            gobo_links.new(gobo_cord.outputs[0], wheel_rota.inputs[0])
-                            gobo_links.new(wheel_rota.outputs[0], wheel_node.inputs[0])
-                            gobo_links.new(wheel_node.outputs[0], opacity_node.inputs[0])
-                            create_gobo_driver(wheel_node, wheel_rota, root_object, gobo_count)
-                            previous_node = wheel_node
-                        gobo_cord.location = (-1040, 90)
-                        opacity_node.location = (100, 300)
-                        gobo_links.new(opacity_node.outputs[0], material_node.inputs[0])
-                        if check_wheels:
-                            for idx, wheel in enumerate(list(gobo_data.keys())[1:], 2):
-                                start = gobo_data.get(wheel)
-                                gobo_name = 'Gobo %d' % idx
-                                align_x = int((idx - 2) * 280)
-                                align_y = int((idx - 2) * -150)
-                                slot_count = start.get('Count')
-                                gobo_mix = gobo_nodes.new('ShaderNodeMixRGB')
-                                gobo_node = gobo_nodes.new('ShaderNodeTexImage')
-                                rota_node = gobo_nodes.new('ShaderNodeVectorRotate')
-                                light_fall = gobo_nodes.get('Light Falloff', False)
-                                if not light_fall:
-                                    light_path = gobo_nodes.new('ShaderNodeLightPath')
-                                    light_fall = gobo_nodes.new('ShaderNodeLightFalloff')
-                                    light_fall.location = (-840, 460)
-                                    light_path.location = (-1040, 460)
-                                    gobo_links.new(light_path.outputs[1], light_fall.inputs[0])
-                                    gobo_links.new(light_path.outputs[8], light_fall.inputs[1])
-                                gobo_node.color_mapping.blend_type = 'LINEAR_LIGHT'
-                                root_object['%s Select' % gobo_name] = 0
-                                gobo_mix.blend_type = 'MULTIPLY'
-                                gobo_node.extension = 'EXTEND'
-                                gobo_node.image = start
-                                mix_name = 'Gobo %d Mix' % (idx - 1) if idx > 2 else 'Gobo Mix'
-                                gobo_mix.label = gobo_mix.name = mix_name
-                                rota_node.label = rota_node.name = '%s Rotate' % gobo_name
-                                gobo_node.label = gobo_node.name = gobo_name
-                                gobo_node.location = (-620 + align_x, 40)
-                                rota_node.location = (-840, 40 + align_y)
-                                opacity_node.location = (100 + align_x, 300)
-                                material_node.location = (300 + align_x, 300)
-                                gobo_mix.location = (-300 + align_x, 340) if has_iris else (-100 + align_x, 340)
-                                gobo_mix.inputs[1].default_value[:3] = [1.0] * 3
-                                gobo_mix.inputs[2].default_value[:3] = gelcolor[:]
-                                create_gobo_driver(gobo_node, rota_node, root_object, slot_count)
-                                gobo_links.new(light_fall.outputs[0], gobo_mix.inputs[0])
-                                gobo_links.new(previous_node.outputs[0], gobo_mix.inputs[1])
-                                gobo_links.new(gobo_mix.outputs[0], opacity_node.inputs[0])
-                                gobo_links.new(gobo_cord.outputs[0], rota_node.inputs[0])
-                                gobo_links.new(rota_node.outputs[0], gobo_node.inputs[0])
-                                gobo_links.new(gobo_node.outputs[0], gobo_mix.inputs[2])
-                                previous_node = gobo_mix
-                        if has_iris:
-                            light_fall = gobo_nodes.get('Light Falloff', False)
-                            iris_node = gobo_nodes.new('ShaderNodeTexImage')
-                            if not light_fall:
-                                light_path = gobo_nodes.new('ShaderNodeLightPath')
-                                light_fall = gobo_nodes.new('ShaderNodeLightFalloff')
-                                light_fall.location = (-840, 460)
-                                light_path.location = (-1040, 460)
-                                gobo_links.new(light_path.outputs[1], light_fall.inputs[0])
-                                gobo_links.new(light_path.outputs[8], light_fall.inputs[1])
-                            if previous_node is not None:
-                                iris_mix = gobo_nodes.new('ShaderNodeMixRGB')
-                                iris_mix.label = iris_mix.name = 'Iris Mix'
-                                iris_mix.blend_type = 'MULTIPLY'
-                                iris_mix.location = (-100 + max(wheel_count - 2, 0) * 200, 340)
-                                gobo_links.new(iris_node.outputs[0], iris_mix.inputs[2])
-                                gobo_links.new(previous_node.outputs[0], iris_mix.inputs[1])
-                                gobo_links.new(light_fall.outputs[0], iris_mix.inputs[0])
-                            else:
-                                iris_mix = iris_node
-                            create_iris_nodes(gobo_material, root_object, iris_node, gobo_cord)
-                            if check_wheels:
-                                iris_mix.location = (-100 + max(wheel_count - 2, 0) * 200, 340)
-                                iris_node.location = (-300 + max(wheel_count - 2, 0) * 200, 150)
-                                opacity_node.location = (100 + max(wheel_count - 2, 0) * 200, 320)
-                                material_node.location = (300 + max(wheel_count - 2, 0) * 200, 300)
-                            gobo_links.new(iris_mix.outputs[0], opacity_node.inputs[0])
-                else:
-                    for mtl in obj.data.materials:
-                        obj_name = obj.get('Fixture Name', obj.name)
-                        split_name = mtl.name.split('.')[0]
-                        mtl_name = split_name.split('_')[-1]
-                        mtl.name = '%s_%s' % (obj_name, mtl_name)
-            if obj.get('Use Root'):
+            create_beam_features(obj, has_blend, has_focus, has_iris, has_gobos, start_gobo, gelcolor,
+                                 check_wheels, wheel_name, zoom_angle, zoom_range, root_object)
+
+            if obj.get("Use Root"):
                 for parents in obj.children_recursive:
                     if len(parents.children) > 1:
                         for idx, childs in enumerate(parents.children, 1):
                             if len(childs.children) > 1:
                                 parents.visible_shadow = False
                                 for i, child in enumerate(childs.children, 1):
-                                    child_name = child.name.split('.')[0]
-                                    child.name = '%s %d' % (child_name, i)
+                                    child_name = remove_suffix(child.name)
+                                    child.name = "%s %d" % (child_name, i)
                             else:
                                 for child in childs.children_recursive:
-                                    child_name = child.name.split('.')[0]
-                                    child.name = '%s %d' % (child_name, idx)
-            if obj.get('Geometry Type') == 'Axis':
-                mobile_axis = obj.get('Mobile Axis')
-                check_sub_axis = obj.get('Sub Axis')
-                if root_object and mobile_axis in {'Pan', 'Tilt'}:
+                                    child_name = remove_suffix(child.name)
+                                    child.name = "%s %d" % (child_name, idx)
+            if obj.get("Geometry Type") == "Axis":
+                mobile_axis = obj.get("Mobile Axis")
+                check_sub_axis = obj.get("Sub Axis")
+                if root_object and mobile_axis in movingHead:
                     if check_sub_axis:
-                        create_trackball_property(root_object, 'Position', TARGETS)
-                        create_trackball_driver(obj, root_object, 'Position')
+                        create_trackball_property(root_object, "Position", TARGETS)
+                        create_trackball_driver(obj, root_object, "Position")
                     else:
-                        create_trackball_property(root_object, 'Movement', TARGETS)
-                        create_trackball_driver(obj, root_object, 'Movement')
+                        create_trackball_property(root_object, "Movement", TARGETS)
+                        create_trackball_driver(obj, root_object, "Movement")
                 obj.hide_select = True
-                obj['UUID'] = uid
+                obj["UUID"] = uid
 
         for obj in layer_collect.collection.all_objects:
-            if obj.get('UUID') == uid or (obj.get('Geometry Type') == 'Target' and obj.get('Fixture Name') == collection_name):
+            if obj.get("UUID") == uid or (obj.get("Geometry Type") == "Target" and obj.get("Fixture Name") == collection_name):
                 obj.select_set(False) if obj.hide_select else obj.select_set(True)
 
     linkDict.clear()
+    rangeData.clear()
+    targetData.clear()
+    channelData.clear()
 
 
 def load_gdtf(context, filename, mscale, name, position, focus_point, fix_id,
@@ -1993,9 +2033,6 @@ def load_gdtf(context, filename, mscale, name, position, focus_point, fix_id,
     fixture_build(context, filename, mscale, name, position, focus_point, fix_id,
                   gelcolor, collect, None, TARGETS, BEAMS, CONES, MODE_NR)
 
-    rangeData.clear()
-    targetData.clear()
-    channelData.clear()
     context.scene.cycles.preview_pause = False
 
 
@@ -2013,9 +2050,9 @@ def load_prepare(context, filename, global_matrix, collect, align_objects, align
         distribution = count * align_objects
         align = 0.5 * (fix_count * align_objects) - (0.5 * align_objects)
         spread = (device_position[0] + (distribution - align), device_position[1], device_position[2])
-        if align_axis == 'Y':
+        if align_axis == "Y":
             spread = (device_position[0], device_position[1] + (distribution - align), device_position[2])
-        elif align_axis == 'Z':
+        elif align_axis == "Z":
             spread = (device_position[0], device_position[1], device_position[2] + (distribution - align))
         position = mathutils.Matrix.Translation(spread)
         focus_point = mathutils.Matrix.Translation((spread[0], spread[1], 0))
@@ -2024,7 +2061,7 @@ def load_prepare(context, filename, global_matrix, collect, align_objects, align
 
 
 def load(operator, context, files=[], directory="", filepath="", fixture_index=0, fixture_count=1, fixture_mode=1,
-         align_axis={'X'}, align_objects=1.0, scale_objects=1.0, gel_color=[1.0, 1.0, 1.0], device_position=None,
+         align_axis={"X"}, align_objects=1.0, scale_objects=1.0, gel_color=[1.0, 1.0, 1.0], device_position=None,
          use_collection=False, use_targets=True, use_beams=True, use_show_cone=False, global_matrix=None):
 
     context.window.cursor_set('WAIT')
