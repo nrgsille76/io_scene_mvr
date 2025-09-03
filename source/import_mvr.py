@@ -14,7 +14,7 @@ import mathutils
 import py_mvr as pymvr
 from pathlib import Path
 from io_scene_3ds.import_3ds import load_3ds
-from .import_gdtf import fixture_build, load_gdtf
+from .import_gdtf import fixture_build
 
 
 auxData = {}
@@ -33,20 +33,76 @@ class FixtureGroup:
         self.uuid = uuid
 
 
-def not_zero(num):
-    zero = True
-    if isinstance(num, int):
-        zero = num >= 1
+def get_nums(num):
+    """Get the numbers from index string."""
+    return list(map(int, num.replace("-", "_").split("_")))
 
-    return zero
+
+def isZero(num):
+    """Check if index is zero."""
+    is_zero = num == 0
+    if num is None:
+        return True
+    elif isinstance(num, bool):
+        return num
+    elif isinstance(num, str):
+        nums = get_nums(num)
+        is_zero = abs(sum(nums)) < 1
+    elif isinstance(num, int):
+        is_zero = abs(num) < 1
+
+    return is_zero
+
+
+def notZero(num):
+    """Check if index has value."""
+    not_zero = num != 0
+    if num is None:
+        return False
+    elif isinstance(num, bool):
+        return num
+    elif isinstance(num, str):
+        nums = get_nums(num)
+        not_zero = (sum(nums) // len(nums)) > 0
+    elif isinstance(num, int):
+        not_zero = num > 0
+
+    return not_zero
+
+
+def drop_suffix(name, space=False):
+    """Drop suffix string."""
+    if name is None:
+        return f"{name}"
+    if space:
+        split_name = name.split("_")
+    else:
+        split_name = name.split(".")
+    final_name = split_name[0]
+    if len(split_name) > 2:
+        final_name = ".".join(split_name[:-1])
+
+    return final_name
+
+
+def create_index_tag(idx, grp=None, amt=False):
+    """Create an ID tag."""
+    index_tag = subex_tag = f"{idx}"
+    if amt == 1 and isZero(idx) and notZero(grp):
+        index_tag = subex_tag = f"{grp}"
+    elif amt > 1 or notZero(grp) and notZero(idx):
+        index_tag = f"{grp}-{idx}"
+        subex_tag = f"{grp}_{idx}"
+
+    return index_tag, subex_tag
 
 
 def get_filepath(spec, assets):
     """Search for file and create filepath."""
     filepath = None
     if spec:
-        file_line = spec.replace(' ','_')
-        file_space = spec.replace('_',' ')
+        file_line = spec.replace(" ","_")
+        file_space = spec.replace("_"," ")
         for root, dirs, files in os.walk(assets):
             if spec in files:
                 filepath = os.path.join(root, spec)
@@ -56,7 +112,7 @@ def get_filepath(spec, assets):
                 filepath = os.path.join(root, file_space)
             else:
                 for file in files:
-                    if file.split('.')[0] == spec:
+                    if drop_suffix(file) == spec:
                         filepath = os.path.join(root, file)
                         break
     return filepath
@@ -65,7 +121,7 @@ def get_filepath(spec, assets):
 def extract_mvr_textures(mvr_scene, folder_path):
     """Extract textures from zip file."""
     for name in mvr_scene._package.namelist():
-        if name.endswith('.png') or name.endswith('.jpg'):
+        if name.endswith(".png") or name.endswith(".jpg"):
             mvr_scene._package.extract(name, folder_path)
 
 
@@ -81,26 +137,27 @@ def extract_mvr_object(mvr_scene, extracted, folder_path, file):
 
 def check_for_digits(name):
     """Check for duplicated names."""
-    check3Digits = name[-3:].isdigit() and name[-4] == '.'
-    check4Digits = name[-4:].isdigit() and name[-5] == '.'
+    check3Digits = len(name) >= 4 and name[-3:].isdigit() and name[-4] == "."
+    check4Digits = len(name) >= 5 and name[-4:].isdigit() and name[-5] == "."
     check_digits = check3Digits or check4Digits
 
     return check_digits
 
 
-def create_mvr_props(obj, mvr_cls, name="", uid=False, cls=None, ref=None, obc=None):
+def create_mvr_props(obj, mvr_cls, name="", uid=False,
+                     cls=None, ref=None, obc=None):
     """Create MVR object properties."""
-    obj['MVR Class'] = mvr_cls
+    obj["MVR Class"] = mvr_cls
     if name and len(name):
-        obj['MVR Name'] = name
+        obj["MVR Name"] = name
     if cls:
-        obj['Classing'] = cls
+        obj["Classing"] = cls
     if obc:
-        obj['Object Class'] = obc
+        obj["Object Class"] = obc
     if ref:
-        obj['Reference'] = ref
+        obj["Reference"] = ref
     if uid:
-        obj['UUID'] = uid
+        obj["UUID"] = uid
 
 
 def create_transform_property(obj, collection=None, matrix=False):
@@ -130,21 +187,25 @@ def get_matrix(obj, mtx):
     """Get matrix from MVR object."""
     mtx_data = obj.matrix.matrix
     obj_mtx = mathutils.Matrix(mtx_data).transposed()
-    check_float = any(isinstance(i, float) for i in set().union(sum(mtx_data, [])))
+    check_float = any(isinstance(i, float) for i in
+                      set().union(sum(mtx_data, [])))
     global_matrix = obj_mtx @ mtx if check_float else mtx
+
     return global_matrix
 
 
 def trans_matrix(trans_mtx):
     """Transform matrix from 4x3 to 4x4."""
     mtx = list(trans_mtx)
-    matrix = mathutils.Matrix((mtx[:3]+[0], mtx[3:6]+[0], mtx[6:9]+[0], mtx[9:]+[1])).transposed()
+    matrix = mathutils.Matrix((mtx[:3]+[0], mtx[3:6]+[0],
+                               mtx[6:9]+[0], mtx[9:]+[1])).transposed()
+
     return matrix
 
 
 def move_instance(obj):
     """Move instance if transform."""
-    transform = obj.get('Transform')
+    transform = obj.get("Transform")
     if transform:
         obj.matrix_world = trans_matrix(transform)
 
@@ -159,7 +220,7 @@ def merge_material(obj):
         mtl_slots = obj.material_slots
         for midx, material in enumerate(mtl_slots):
             if check_for_digits(material.name):
-                mtl_name = material.name.split('.')[0]
+                mtl_name = drop_suffix(material.name)
                 if mtl_name in mtl_data:
                     mtl_index.append(midx)
                     materials.append(mtl_name)
@@ -176,89 +237,83 @@ def merge_material(obj):
 def check_existing(node, collection):
     """Check for already existing objects."""
     cls_name = node.__class__.__name__
-    existing = any(col.get('UUID') == node.uuid for col in collection.children)
+    existing = any(col.get("UUID") == node.uuid for col in collection.children)
     if existing:
         for collect in collection.children:
-            if collect.get('MVR Class') == cls_name:
+            if collect.get("MVR Class") == cls_name:
                 for obj in collect.all_objects:
-                    transform = obj.get('Transform')
+                    transform = obj.get("Transform")
                     if transform is not None:
                         obj.matrix_world = trans_matrix(transform)
     return existing
 
 
-def create_index_tag(idx, grp=0, msh=False):
-    """Create a ID tag."""
-    if not msh and not_zero(grp):
-        index_tag = f"{grp}-{idx}"
-    elif msh and not_zero(grp):
-        index_tag = f"{grp}_{idx}"
-    elif not_zero(idx) and grp == 0:
-        index_tag = str(idx)
-    elif not_zero(grp) and idx == 0:
-        index_tag = str(grp)
-    else:
-        index_tag = ""
-
-    return index_tag
+def get_clean_name(item, idx=0, grp=None):
+    """Get a clean indexed object name."""
+    if item is None:
+        return
+    itsaNumber = isinstance(grp, int)
+    itsaString = isinstance(item, str)
+    id_name = item if itsaString else item.name
+    item_cls = mvr_cls = item.__class__.__name__
+    item_name = layer_name = drop_suffix(id_name)
+    hasNumber = len(item_name) and item_name[-1].isdigit()
+    mvr_cls = item_cls if itsaString else item.get("MVR Class")
+    grp_idx = f"{grp}_{idx}" if item_cls == "Object" else f"{grp}-{idx}"
+    if itsaNumber and notZero(idx) and notZero(grp):
+        layer_name = f"{item_name} {grp_idx}"
+    elif grp is None and notZero(idx):
+        layer_name = f"{item_name} {idx}"
+    elif notZero(grp) and not hasNumber:
+        layer_name = f"{item_name} {grp}"
+    if itsaString:
+        return layer_name
+    elif check_for_digits(item.name) or item_name == mvr_cls:
+        item.name = layer_name
+    if check_for_digits(item.name) and itsaNumber:
+        if item_cls == "Collection":
+            clean_name = f"{item_name} {grp}-{idx}"
+        elif item_cls == "Object":
+            clean_name = f"{item_name} {grp}_{idx}"
+        item.name = clean_name
+    if check_for_digits(item.name):
+        if itsaNumber:
+            idsum = sum((idx, grp))
+            item.name = f"{item_name} {idsum}"
+        else:
+            item.name = f"{item_name} {idx} {grp}"
 
 
 def get_mvr_name(node, index=0, layer=None):
     """Get a proper MVR name."""
     name = node.name
+    layer_id = f"{index}"
     cls_name = node.__class__.__name__
-    is_layer = layer is not None and layer >= 1
-    idx_value = int(index[-1]) if isinstance(index, str) else int(index)
-    if is_layer and index is not None:
-        if idx_value >= 1 and cls_name == "Object":
-            index = f"{layer}_{index}"
-        elif idx_value >= 1:
-            index = f"{layer}-{index}"
-        else:
-            index = layer
-    layer_id = f"L{index}"
-    if is_layer:
-        layer_id = f"L{layer}-{index}" if idx_value >= 1 else f"L{layer}"
-    id_name = name.split('.')[0] if name else cls_name
-    if cls_name == "Layer":
-        id_name = '%s %s' % (layer_id, id_name)
-    elif is_layer:
-        id_name = f"{id_name} {layer}-{index}"
+    mvr_name = name if name else cls_name
+    if notZero(layer) and notZero(index):
+        layer_id = f"{layer}-{index}"
+    elif notZero(layer) and isZero(index):
+        layer_id = f"{layer}"
+    if isZero(layer) and isZero(index):
+        idx_name = mvr_name
+    elif cls_name == "Layer":
+        idx_name = f"L{layer_id} {mvr_name}"
     else:
-        id_name = f"{id_name} {index}" if idx_value >= 1 else id_name
+        idx_name = f"{mvr_name} {layer_id}"
 
-    return id_name, cls_name
-
-
-def get_clean_name(item, idx, lyr=None):
-    """Get a clean indexed object name."""
-    if item is None:
-        return
-    mvr_cls = item.get('MVR Class')
-    mvr_idx = item.get('MVR Index')
-    item_cls = item.__class__.__name__
-    item_name = item.name.split('.')[0]
-    has_number = item_name[-1].isdigit()
-    layer_name = f"{item_name} {lyr}" if not has_number and lyr is not None and lyr >= 1 else item_name
-    if check_for_digits(item.name):
-        if lyr is not None and item_cls == "Collection":
-            item.name = f"{layer_name}-{idx}" if idx >= 1 else layer_name
-        elif lyr is not None and item_cls == "Object":
-            item.name = f"{layer_name}_{idx}" if idx >= 1 else layer_name
-        else:
-            item.name = f"{layer_name} {idx}"
+    return mvr_name, idx_name, cls_name
 
 
-def add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path, fixture_idx,
+def add_mvr_fixture(context, mvr_scene, fixture, mscale, folderpath, fixture_idx,
                     layer_idx, extracted, group_collect, apply, TARGETS,
                     focus_points, fixture_path, fixture_group=None):
 
     """Add fixture to the scene."""
     fixture_pos = get_matrix(fixture, mscale)
     if fixture.gdtf_spec:
-        fixture_file = os.path.join(folder_path, fixture.gdtf_spec)
+        fixture_file = os.path.join(folderpath, fixture.gdtf_spec)
     else:
-        fixture_file = os.path.join(folder_path, "Custom@Fixture.gdtf")
+        fixture_file = os.path.join(folderpath, "Custom@Fixture.gdtf")
     if fixture.fixture_id is not None and len(fixture.fixture_id):
         fixture_id = int(fixture.fixture_id)
     else:
@@ -266,7 +321,7 @@ def add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path, fixture_id
 
     if f"{fixture.gdtf_spec}" in mvr_scene._package.namelist():
         if fixture.gdtf_spec not in extracted.keys():
-            mvr_scene._package.extract(fixture.gdtf_spec, folder_path)
+            mvr_scene._package.extract(fixture.gdtf_spec, folderpath)
             extracted[fixture.gdtf_spec] = 0
         else:
             extracted[fixture.gdtf_spec] += 1
@@ -280,9 +335,9 @@ def add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path, fixture_id
         focus_point = get_matrix(focus_points[0], mscale)
 
     if not existing_fixture:
-        print(f"Info: {fixture.gdtf_spec} not available, using a generic PAR instead.")
+        print(f"Info: {fixture.gdtf_spec} not available, using generic PAR instead.")
         fixture.gdtf_spec = "NRGSille_Lighting@Simple_LED_PAR@rev2.gdtf"
-        fixture_file = os.path.join(Path(folder_path).parent.parent, "gdtf", fixture.gdtf_spec)
+        fixture_file = os.path.join(Path(folderpath).parent.parent, "gdtf", fixture.gdtf_spec)
 
     fixture_build(context, fixture_file, mscale, fixture.name, fixture_pos, focus_point,
                   fixture_id, fixture.color, group_collect, fixture, TARGETS)
@@ -294,11 +349,11 @@ def add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path, fixture_id
         if target_collect:
             group_collect = target_collect
         process_mvr_object(context, mvr_scene, focus_points[0], fixture_idx,
-                           mscale, apply, folder_path, extracted, group_collect)
+                           mscale, apply, folderpath, extracted, group_collect)
 
 
-def get_child_list(context, mscale, mvr_scene, layer, layer_idx, folder_path, extracted,
-                   apply, layer_collect, FIXTURES, TARGETS, fixturepath, fixture_group=None):
+def get_child_list(context, mscale, mvr_scene, layer, layer_idx, folderpath, extracted,
+                   apply, layer_collect, FIXTURES, TARGETS, fixpath, fixture_group=None):
     """Get all MVR obects from the child lists."""
 
     child_list = layer.child_list
@@ -313,28 +368,28 @@ def get_child_list(context, mscale, mvr_scene, layer, layer_idx, folder_path, ex
 
         if fixture_group is None:
             group_name = truss_obj.name or "Truss"
-            group_name =  '%s %d' % (group_name, truss_idx) if truss_idx >= 1 else group_name
+            group_name =  get_clean_name(group_name, truss_idx)
             fixture_group = FixtureGroup(group_name, truss_obj.uuid)
 
         if not existing:
             process_mvr_object(context, mvr_scene, truss_obj, truss_idx, mscale,
-                               apply, folder_path, extracted, layer_collect)
+                               apply, folderpath, extracted, layer_collect)
 
         if hasattr(truss_obj, "child_list") and truss_obj.child_list:
             get_child_list(context, mscale, mvr_scene, truss_obj, truss_idx,
-                           folder_path, extracted, apply, layer_collect,
-                           FIXTURES, TARGETS, fixturepath, fixture_group)
+                           folderpath, extracted, apply, layer_collect,
+                           FIXTURES, TARGETS, fixpath, fixture_group)
 
     for scene_idx, scene_obj in enumerate(child_list.scene_objects):
         existing = check_existing(scene_obj, layer_collect)
 
         if not existing:
             process_mvr_object(context, mvr_scene, scene_obj, scene_idx, mscale,
-                               apply, folder_path, extracted, layer_collect)
+                               apply, folderpath, extracted, layer_collect)
 
         if hasattr(scene_obj, "child_list") and scene_obj.child_list:
-            get_child_list(context, mscale, mvr_scene, scene_obj, scene_idx, folder_path,
-                           extracted, apply, layer_collect, FIXTURES, TARGETS, fixturepath)
+            get_child_list(context, mscale, mvr_scene, scene_obj, scene_idx, folderpath,
+                           extracted, apply, layer_collect, FIXTURES, TARGETS, fixpath)
 
     if FIXTURES:
         if fixture_group is None:
@@ -343,38 +398,40 @@ def get_child_list(context, mscale, mvr_scene, layer, layer_idx, folder_path, ex
         for fixture_idx, fixture in enumerate(child_list.fixtures):
             focus_points = []
             if fixture.focus is not None:
-                focus_points.extend([fp for fp in child_list.focus_points if fp.uuid == fixture.focus])
+                focus_points.extend([fp for fp in child_list.focus_points if
+                                     fp.uuid == fixture.focus])
 
-            add_mvr_fixture(context, mvr_scene, fixture, mscale, folder_path,
+            add_mvr_fixture(context, mvr_scene, fixture, mscale, folderpath,
                             fixture_idx, layer_idx, extracted, layer_collect,
-                            apply, TARGETS, focus_points, fixturepath, fixture_group)
+                            apply, TARGETS, focus_points, fixpath, fixture_group)
 
             if hasattr(fixture, "child_list") and fixture.child_list:
                 get_child_list(context, mscale, mvr_scene, fixture, fixture_idx,
-                               folder_path, extracted, apply, layer_collect,
-                               FIXTURES, TARGETS, fixturepath, fixture_group)
+                               folderpath, extracted, apply, layer_collect,
+                               FIXTURES, TARGETS, fixpath, fixture_group)
 
     for group_idx, group in enumerate(child_list.group_objects):
         if hasattr(group, "child_list") and group.child_list:
-            group_name, group_class = get_mvr_name(group)
-            if layer_collect.get("MVR Class") == "Layer":
-                layer_name = group.name or "Group"
-            print("importing %s... %s" % (group_class, group_name))
+            group_name, index_name, group_class = get_mvr_name(group, group_idx, layer_idx)
+            if layer_collect.get("MVR Class") == "Layer" and group.name is None:
+                group.name = "L%d Group" % layer_idx if notZero(layer_idx) else "Group"
+                group_name, index_name, group_class = get_mvr_name(group, group_idx)   
+            print("importing %s... %s" % (group_class, index_name))
             group_collection = data_collect.new(group_name)
-            group_collection["MVR Index"] = group_idx
+            group_collection["MVR Index"] = layer_idx
             layer_collect.children.link(group_collection)
             create_transform_property(group, group_collection, True)
             classing = group.classing if hasattr(group, "classing") else None
-            create_mvr_props(group_collection, group_class, group_name,
+            create_mvr_props(group_collection, group_class, index_name,
                              group.uuid, classing, layer_collect.name)
-            get_child_list(context, mscale, mvr_scene, group, group_idx, folder_path, extracted,
-                           apply, group_collection, FIXTURES, TARGETS, fixturepath, fixture_group)
+            get_child_list(context, mscale, mvr_scene, group, group_idx, folderpath, extracted,
+                           apply, group_collection, FIXTURES, TARGETS, fixpath, fixture_group)
 
     for obj in viewlayer.active_layer_collection.collection.all_objects:
         obj.select_set(True)
 
 
-def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, apply, folder_path, extracted, group_collect):
+def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, apply, folderpath, extracted, group_collect):
     """Processing MVR xml node objects."""
 
     uid = mvr_object.uuid
@@ -383,12 +440,12 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, apply, f
     data_collect = bpy.data.collections
     scene_collect = context.scene.collection
     layer_collect = viewlayer.layer_collection
-    name, class_name = get_mvr_name(mvr_object)
     active_layer = viewlayer.active_layer_collection
-    symdef_id = isinstance(mvr_object, pymvr.Symdef)
-    focus_id = isinstance(mvr_object, pymvr.FocusPoint)
+    itsaSymdef = isinstance(mvr_object, pymvr.Symdef)
+    itsaFocus = isinstance(mvr_object, pymvr.FocusPoint)
+    name, idx_name, class_name = get_mvr_name(mvr_object, mvr_idx)
     classing = mvr_object.classing if hasattr(mvr_object, "classing") else None
-    print("creating %s... %s" % (class_name, name))
+    print("creating %s... %s" % (class_name, idx_name))
 
     def add_mvr_object(node, mtx, collect, folder=None, file=""):
         imported = []
@@ -396,8 +453,8 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, apply, f
         mesh_name = Path(file).stem
         mesh_data = bpy.data.meshes
         node_type = node.__class__.__name__
-        gltf = file.split('.')[-1] == 'glb'
-        scale_factor = 0.001 if file.split('.')[-1] == '3ds' else 1.0
+        gltf = file.split(".")[-1] == "glb"
+        scale_factor = 0.001 if file.split(".")[-1] == "3ds" else 1.0
         mesh_exist = next((msh for msh in mesh_data if msh.name == mesh_name), False)
         exist = any(ob.data and ob.data.name == mesh_name for ob in collect.objects)
         world_matrix = mtx @ mathutils.Matrix.Scale(scale_factor, 4)
@@ -405,7 +462,7 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, apply, f
 
         if not exist:
             if mesh_exist:
-                mesh_id = mesh_exist.get('MVR Name', mesh_name)
+                mesh_id = mesh_exist.get("MVR Name", mesh_name)
                 new_object = object_data.new(mesh_id, mesh_exist)
                 imported.append(new_object)
             else:
@@ -419,21 +476,24 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, apply, f
             imported_objects = list(filter(None, imported))
             for obj in imported_objects:
                 obj.rotation_mode = 'XYZ'
-                obname = obj.name.split('.')[0]
-                create_mvr_props(obj, class_name, obname, uid, classing, mesh_name, node_type)
+                obname = drop_suffix(obj.name)
+                create_mvr_props(obj, class_name, obname, uid,
+                                 classing, mesh_name, node_type)
                 if obj.parent is None:
                     if gltf or obj.type != 'MESH':
-                        obj.matrix_local = world_matrix @ obj.matrix_world.copy()
+                        obj.matrix_world = world_matrix @ obj.matrix_world.copy()
                     else:
-                        obj.matrix_local = world_matrix
+                        obj.matrix_world = world_matrix
                 if obj.data is None:
                     obj.empty_display_size = 0.001
                 else:
                     obj.data.name = mesh_name
-                    create_mvr_props(obj.data, class_name, obname, uid, classing, item_name, node_type)
+                    create_mvr_props(obj.data, class_name, obname, uid,
+                                     classing, item_name, node_type)
                     if obj.data.id_type == 'MESH':
                         for material in obj.data.materials:
-                            create_mvr_props(material, class_name, obname, uid, classing, item_name)
+                            create_mvr_props(material, class_name, obname,
+                                             uid, classing, item_name)
                 if len(obj.users_collection) and obj.name in obj.users_collection[0].objects:
                     obj.users_collection[0].objects.unlink(obj)
                 elif obj.name in layer_collect.collection.objects:
@@ -457,60 +517,63 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, apply, f
         symbols.append(mvr_object)
     elif isinstance(mvr_object, pymvr.Geometry3D):
         geometrys.append(mvr_object)
-    elif not symdef_id and mvr_object.geometries:
+    elif not itsaSymdef and mvr_object.geometries:
         symbols += mvr_object.geometries.symbol
         geometrys += mvr_object.geometries.geometry3d
     elif class_name not in objectMVR:
         symbols += mvr_object.symbol
         geometrys += mvr_object.geometry3d
 
-    if focus_id:
+    if itsaFocus:
         active_collect = group_collect
-    elif symdef_id:
+    elif itsaSymdef:
         create_mvr_props(group_collect, class_name, name, uid)
-        active_collect = next((col for col in data_collect if col.get('Reference') == uid), False)
+        active_collect = next((col for col in data_collect if
+                               col.get("Reference") == uid), False)
         if not active_collect:
             active_collect = data_collect.get(uid)
             if active_collect is None:
                 active_collect = data_collect.new(uid)
-        if active_collect.get('MVR Class') is None:
-            create_mvr_props(active_collect, class_name, uid)
+        if active_collect.get("MVR Class") is None:
+            create_mvr_props(active_collect, class_name, name, uid)
         active_collect.hide_render = True
-    elif not focus_id and (len(geometrys) + len(symbols)) > 1:
-        obj_name, cls_name = get_mvr_name(mvr_object)
-        print("creating extra collection", obj_name)
-        active_collect = data_collect.new(obj_name)
+    elif not itsaFocus and (len(geometrys) + len(symbols)) > 1:
+        print("creating extra collection", idx_name)
+        active_collect = data_collect.new(name)
         active_collect["MVR Index"] = mvr_idx
-        create_mvr_props(active_collect, cls_name, name, uid, classing)
+        create_mvr_props(active_collect, class_name, idx_name, uid, classing)
         group_collect.children.link(active_collect)
         collection = active_collect
 
     if active_collect is None:
-        active_collect = next((col for col in data_collect if col.get('UUID') == uid), False)
+        active_collect = next((col for col in data_collect if
+                               col.get("UUID") == uid), False)
         if not active_collect and not len(symbols):
-            reference = collection.get('UUID')
+            reference = collection.get("UUID")
             active_collect = data_collect.new(name)
             active_collect["MVR Index"] = mvr_idx
-            create_mvr_props(active_collect, class_name, name, uid, classing, reference)
+            create_mvr_props(active_collect, class_name, idx_name, uid, classing, reference)
 
     for geometry in geometrys:
         file = geometry.file_name
-        extract_mvr_object(mvr_scene, extracted, folder_path, file)
-        obj_mtx = get_matrix(mvr_object, mscale) if focus_id else get_matrix(geometry, mscale)
-        object_collect = add_mvr_object(geometry, obj_mtx, active_collect, folder_path, file)
+        extract_mvr_object(mvr_scene, extracted, folderpath, file)
+        obj_mtx = get_matrix(mvr_object, mscale) if itsaFocus else get_matrix(geometry, mscale)
+        object_collect = add_mvr_object(geometry, obj_mtx, active_collect, folderpath, file)
         if object_collect and object_collect.name not in collection.children and collection != object_collect:
             collection.children.link(object_collect)
                
     for idx, symbol in enumerate(symbols):
         symbol_type = symbol.__class__.__name__
         symbol_mtx = get_matrix(symbol, context_matrix)
-        if not symdef_id:
+        if not itsaSymdef:
             symbol_mtx = get_matrix(mvr_object, symbol_mtx)
         symbol_collect = data_collect.get(symbol.symdef)
 
         if symbol_collect:
+            sym_cnt = len(symbol_collect.objects)
+            sym_tag = create_index_tag(idx, mvr_idx, sym_cnt)
+            sym_idx = "%s %s" % (name, sym_tag)
             symbol_object = object_data.new(name, None)
-            symbol_object["MVR Index"] = idx
             collection.objects.link(symbol_object)
             symbol_object.matrix_world = symbol_mtx
             symbol_object.empty_display_size = 0.001
@@ -518,19 +581,22 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, apply, f
             symbol_object.instance_type = 'COLLECTION'
             symbol_object.instance_collection = symbol_collect
             create_transform_property(symbol_object, symbol_collect)
-            create_mvr_props(symbol_object, class_name, name, uid, symbol.uuid, classing, symbol_type)
+            create_mvr_props(symbol_object, class_name, sym_idx, uid, symbol.uuid, classing, symbol_type)
             create_mvr_props(symbol_collect, symbol_type, name, symbol.uuid, classing, symbol.symdef, "Symdef")
 
-    if focus_id:
-        target = next((ob for ob in group_collect.objects if
-                       ob.get("Geometry Type") == "Target" and
-                       ob.get("UUID") == mvr_object.uuid), None)
-        if target:
-            target_mtx = target.matrix_world.copy()
+    if itsaFocus:
+        focus_target = next((ob for ob in group_collect.objects if
+                             ob.get("Geometry Type") == "Target" and
+                             ob.get("UUID") == mvr_object.uuid), None)
+        if focus_target:
+            target_mtx = focus_target.matrix_world.copy()
             for ob in group_collect.objects:
-                if ob.parent is None and ob.get("MVR Class") == "FocusPoint" and ob.get("UUID") == mvr_object.uuid:
-                    ob.parent = target
-                    ob.matrix_parent_inverse = target.matrix_world.inverted()
+                if (ob.parent is None and
+                    ob.get("MVR Class") == "FocusPoint" and
+                    ob.get("UUID") == mvr_object.uuid
+                ):
+                    ob.parent = focus_target
+                    ob.matrix_parent_inverse = focus_target.matrix_world.inverted()
 
 
 def finalize_objects(layers, mscale):
@@ -542,7 +608,7 @@ def finalize_objects(layers, mscale):
             global_mtx = get_matrix(mvr, mscale)
             for obj in obj_collect.objects:
                 if obj.parent is None:
-                    obj.matrix_world = global_mtx @ obj.matrix_local.copy()
+                    obj.matrix_world = global_mtx @ obj.matrix_world.copy()
                     create_transform_property(obj, obj_collect)
                 else:
                     create_transform_property(obj)
@@ -565,63 +631,74 @@ def finalize_objects(layers, mscale):
 
 def create_tree_branch(layer, count):
     """Create MVR collection tree."""
-    level = False
-    if layer.get('MVR Index'):
-        count = layer.get('MVR Index')
+    layer_cls = layer.get("MVR Class")
 
-    def provide_geometries(objs, cid, prt=0):
+    if layer.get("MVR Index"):
+        count = layer.get("MVR Index")
+
+    def provide_geometries(geometries, tag, level=False, prt=None):
         """Treat collection objects."""
-        tag = create_index_tag(cid, prt, True)
-        for obx, obj in enumerate(objs.objects):
+        ob_count = len(geometries.objects)
+        for obx, obj in enumerate(geometries.objects):
             merge_material(obj)
             if obj and obj.is_instancer:
                 move_instance(obj)
-            ob_name = obj.name.split('.')[0]
-            obj.name = '%s %s' % (ob_name, tag)
-            if check_for_digits(obj.name):
-                obj.name = '%s_%d %s' % (ob_name, obx, tag)
-        
-    def index_scene_object(collect, idx, cidx, org=None):
-        """Index scene object collections."""
-        tag = create_index_tag(idx, cidx)
-        col_name = collect.name.split('.')[0]
-        collect.name = f"{col_name} {tag}"
-        if check_for_digits(collect.name):
-            if org is None:
-                collect.name = '%s %d %s' % (col_name, idx, tag)
+            if check_for_digits(obj.name) and not level and notZero(count):
+                obj.name = "L%d %s" % (count, drop_suffix(obj.name))
+            if prt and ob_count == 1:
+                get_clean_name(obj, prt, tag)
             else:
-                alt_tag = get_index_tag(collect, cidx, org)
-                collect.name = '%s %s' % (col_name, alt_tag)
-                if check_for_digits(collect.name):
-                    collect.name = '%s %d %s' % (col_name, cidx, tag)
-        provide_geometries(collect, idx, cidx)
+                get_clean_name(obj, obx, tag)
 
-    def index_group_object(group, gidx, lyr, level=False):
+    def index_scene_object(collect, cidx, gcls, idtag=None):
+        """Index scene object collections."""
+        oblevel = False if gcls == "Layer" else True
+        if idtag is None:
+            get_clean_name(collect, cidx)
+            provide_geometries(collect, cidx)
+        else:
+            get_clean_name(collect, cidx, idtag[0])
+            provide_geometries(collect, idtag[1], oblevel, cidx)
+
+    def index_group_object(group, gidx, lidx, level=False):
         """Index group collections."""
-        group_name = group.name.split('.')[0]
-        group.name = f"{group_name} {lyr}-{gidx}"
-        provide_geometries(group, gidx, lyr)
+        objs = len(group.objects)
+        clds = len(group.children)
+        grp_cls = group.get("MVR Class")
+        grptag = create_index_tag(gidx, lidx, objs)
+        provide_geometries(group, grptag[1], True)
         for idc, col in enumerate(group.children):
-            if col.get("Fixture ID") is None:
-                if col.get("MVR Class") == "SceneObject":
-                    if level:
-                        index_scene_object(col, idc, gidx, lyr)
-                    else:
-                        index_scene_object(col, idc, gidx)
-                elif col.get("MVR Class") == "GroupObject":
-                    index_group_object(col, idc, gidx, True)
+            obs = len(col.objects)
+            col_cls = col.get("MVR Class")
+            if col_cls  == "SceneObject":
+                if level:
+                    obtag = create_index_tag(gidx, lidx, clds)
+                else:
+                    obtag = create_index_tag(idc, gidx, obs)
+                    if notZero(lidx):
+                        col.name = "L%d %s" % (lidx, drop_suffix(col.name))
+                index_scene_object(col, idc, grp_cls, obtag)
+            elif col_cls == "GroupObject":
+                get_clean_name(col, idc, gidx)
+                index_group_object(col, idc, gidx, True)
 
-
-    provide_geometries(layer, count)
-    for cdx, collect in enumerate(layer.children):
+    provide_geometries(layer, count, True)
+    for codx, collect in enumerate(layer.children):
         if collect.get("Fixture ID") is None:
-            if collect.get("MVR Class") == "SceneObject":
-                index_scene_object(collect, cdx, count)
-            elif collect.get("MVR Class") == "GroupObject":
-                index_group_object(collect, cdx, count)
+            colclass = collect.get("MVR Class")
+            if colclass == "SceneObject":
+                object_name = drop_suffix(collect.name)
+                if check_for_digits(collect.name):
+                    object_name = "L%d %s" % (count, object_name)
+                if notZero(count) and object_name != layer.name:
+                    collect.name = object_name
+                index_scene_object(collect, codx, layer_cls)
+            elif colclass == "GroupObject":
+                get_clean_name(collect, codx)
+                index_group_object(collect, codx, count)
 
 
-def load_mvr(context, filename, fixturepath, mscale=mathutils.Matrix(), apply=False, FIXTURES=True, TARGETS=True):
+def load_mvr(context, filename, fixpath, mscale=mathutils.Matrix(), apply=False, FIXTURES=True, TARGETS=True):
     """Create MVR scene and import layers."""
 
     symdefs = []
@@ -636,13 +713,13 @@ def load_mvr(context, filename, fixturepath, mscale=mathutils.Matrix(), apply=Fa
     view_collect = viewlayer.layer_collection
     layer_collect = view_collect.collection
     active_layer = viewlayer.active_layer_collection
-    aux_dir = scene_collect.children.get('AUXData')
+    aux_dir = scene_collect.children.get("AUXData")
     mvr_scene = pymvr.GeneralSceneDescription(filename)
     current_path = os.path.dirname(os.path.realpath(__file__))
-    folder_path = os.path.join(current_path, "assets", "mvr", layers_name)
+    folderpath = os.path.join(current_path, "assets", "mvr", layers_name)
     mvr_layers = mvr_scene.layers if hasattr(mvr_scene, "layers") else []
-    extract_mvr_textures(mvr_scene, folder_path)
-    print("creating Scene... %s" % layers_name)
+    extract_mvr_textures(mvr_scene, folderpath)
+    print("\ncreating Scene... %s" % layers_name)
 
     if hasattr(mvr_scene, "aux_data"):
         auxdata = mvr_scene.aux_data
@@ -663,27 +740,28 @@ def load_mvr(context, filename, fixturepath, mscale=mathutils.Matrix(), apply=Fa
 
         auxData.setdefault(symdef.uuid, aux_collection)
         process_mvr_object(context, mvr_scene, symdef, aux_idx, mscale,
-                           apply, folder_path, extracted, aux_collection)
+                           apply, folderpath, extracted, aux_collection)
 
         if hasattr(symdef, "child_list") and symdef.child_list:
-            get_child_list(context, mscale, mvr_scene, symdef.child_list, aux_idx, folder_path,
-                           extracted, apply, aux_collection, FIXTURES, TARGETS, fixturepath)
+            get_child_list(context, mscale, mvr_scene, symdef.child_list, aux_idx, folderpath,
+                           extracted, apply, aux_collection, FIXTURES, TARGETS, fixpath)
 
     print("importing Layers... %s" % scene_collect.name)
     for layer_idx, layer in enumerate(mvr_layers):
-        layer_collection = next((col for col in data_collect if col.get('UUID') == layer.uuid), False)
+        layer_collection = next((col for col in data_collect if
+                                 col.get("UUID") == layer.uuid), False)
         if not layer_collection:
-            layer_name, layer_class = get_mvr_name(layer, layer_idx)
-            layer_collection = data_collect.new(layer_name)
-            layer_collection['MVR Index'] = layer_idx
+            layer_name, mvr_layer, layer_class = get_mvr_name(layer, layer_idx)
+            layer_collection = data_collect.new(mvr_layer)
+            layer_collection["MVR Index"] = layer_idx
             create_transform_property(layer, layer_collection, True)
-            create_mvr_props(layer_collection, layer_class, layer.name, layer.uuid)
-            print("importing %s... %s" % (layer_class, layer_name))
+            create_mvr_props(layer_collection, layer_class, layer_name, layer.uuid)
+            print("importing %s... %s" % (layer_class, mvr_layer))
             layer_collect.children.link(layer_collection)
             imported_layers.append(layer_collection)
 
-        get_child_list(context, mscale, mvr_scene, layer, layer_idx, folder_path,
-                       extracted, apply, layer_collection, FIXTURES, TARGETS, fixturepath)
+        get_child_list(context, mscale, mvr_scene, layer, layer_idx, folderpath,
+                       extracted, apply, layer_collection, FIXTURES, TARGETS, fixpath)
 
         if len(layer_collection.all_objects) == 0 and layer_collection.name in layer_collect.children:
             layer_collect.children.unlink(layer_collection)
@@ -692,11 +770,11 @@ def load_mvr(context, filename, fixturepath, mscale=mathutils.Matrix(), apply=Fa
 
     if auxData.items():
         aux_type = auxdata.__class__.__name__
-        if 'AUXData' in data_collect:
-            aux_directory = data_collect.get('AUXData')
+        if "AUXData" in data_collect:
+            aux_directory = data_collect.get("AUXData")
         else:
             print("creating AUXData...")
-            aux_directory = data_collect.new('AUXData')
+            aux_directory = data_collect.new("AUXData")
             create_mvr_props(aux_directory, aux_type)
             layer_collect.children.link(aux_directory)
         for sid, (uid, auxcollect) in enumerate(auxData.items()):
@@ -708,7 +786,9 @@ def load_mvr(context, filename, fixturepath, mscale=mathutils.Matrix(), apply=Fa
                     layer_collect.children.unlink(sym_collect)
                 elif sym_collect.name not in auxcollect.children:
                     auxcollect.children.link(sym_collect)
-                get_clean_name(sym_collect, sid)
+                sym_collect.name = sym_collect.get("MVR Name")
+                if check_for_digits(sym_collect.name):
+                    get_clean_name(sym_collect, sid)
                 sym_objects = list(filter(None, sym_collect.all_objects))
                 for idx, obj in enumerate(sym_objects):
                     if check_for_digits(obj.name):
@@ -720,14 +800,14 @@ def load_mvr(context, filename, fixturepath, mscale=mathutils.Matrix(), apply=Fa
 
     if mvr_layers:
         for view in view_collect.children:
-            if view.name == 'AUXData':
+            if view.name == "AUXData":
                 for childs in view.children:
                     for collect in childs.children:
                         collect.hide_viewport = True
 
     viewlayer.update()
     imported_layers.clear()
-    #[fl.unlink() for fl in Path(folder_path).iterdir() if fl.is_file()] 
+    #[fl.unlink() for fl in Path(folderpath).iterdir() if fl.is_file()] 
     print("MVR scene loaded in %.4f sec.\n" % (time.time() - start_time))
 
 
@@ -738,7 +818,6 @@ def load(operator, context, files=[], directory="", filepath="", scale_objects=1
     auxData.clear()
     objectData.clear()
 
-    context.window.cursor_set('WAIT')
     mscale = mathutils.Matrix.Scale(scale_objects, 4)
     if global_matrix is not None:
         mscale = global_matrix @ mscale
@@ -762,7 +841,5 @@ def load(operator, context, files=[], directory="", filepath="", scale_objects=1
     active = context.view_layer.layer_collection.children.get(default_layer.name)
     if active is not None:
         context.view_layer.active_layer_collection = active
-
-    context.window.cursor_set('DEFAULT')
 
     return {'FINISHED'}
