@@ -29,16 +29,16 @@ def get_gdtf_name(name):
     """Create GDTF Spec (Company@Fixture.gdtf)."""
     if name is None:
         gdtf_name = "LightCompany@CustomFixture.gdtf"
-    elif '@' not in name:
-        gdtf_name = '@'.join(name.split())
+    elif "@" not in name:
+        gdtf_name = "@".join(name.split())
     else:
-        split_name = name.split('@')
+        split_name = name.split("@")
         if len(split_name) >= 2:
-            gdtf_name = '@'.join((split_name[0], split_name[1]))
+            gdtf_name = "@".join((split_name[0], split_name[1]))
         else:
             gdtf_name = split_name[0]
-    if not gdtf_name.split('.')[-1] == "gdtf":
-        gdtf_name = '.'.join((gdtf_name, "gdtf"))
+    if not gdtf_name.split(".")[-1] == "gdtf":
+        gdtf_name = ".".join((gdtf_name, "gdtf"))
 
     return gdtf_name
 
@@ -47,8 +47,8 @@ def get_filepath(spec, assets, gdtfname=False):
     """Search for file and create filepath."""
     filepath = None
     if spec:
-        file_line = spec.replace(' ','_')
-        file_space = spec.replace('_',' ')
+        file_line = spec.replace(" ","_")
+        file_space = spec.replace("_"," ")
         for root, dirs, files in os.walk(assets):
             if spec in files:
                 filepath = os.path.join(root, spec)
@@ -56,8 +56,8 @@ def get_filepath(spec, assets, gdtfname=False):
                 fix_name = get_gdtf_name(spec)
                 for file in files:
                     fix_type = get_gdtf_name(file)
-                    fix_line = fix_type.replace(' ','_')
-                    fix_space = fix_type.replace('_',' ')
+                    fix_line = fix_type.replace(" ","_")
+                    fix_space = fix_type.replace("_"," ")
                     if (fix_type == fix_name) or (fix_line == spec) or (fix_space == spec):
                         filepath = os.path.join(root, file)
                         break
@@ -274,7 +274,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
     layer_list = None
     file_list = []
 
-    print("creating Scene... %s" % blend_file)
+    print("\ncreating Scene... %s" % blend_file)
     layers_element = pymvr.LayersElement()
     layers_cls = layers_element.__class__.__name__
     mvr = pymvr.GeneralSceneDescriptionWriter()
@@ -453,7 +453,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                         scene_object, mvr_object = export_symbol(obj)
                     else:
                         meshes = mesh_list.geometry3d
-                        mesh_name = '.'.join((obj.data.name if obj.data else obj.name, "3ds"))
+                        mesh_name = ".".join((obj.data.name if obj.data else obj.name, "3ds"))
                         scene_object, mvr_object = export_geometry(obj, mesh_name, file_list)
                     meshes.append(mvr_object)
                     mesh_list.to_xml(parent=scene_object)
@@ -461,7 +461,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                     meshes.clear()
         else:
             print("creating SceneObject... %s" % scene_layer.name)
-            mesh_name = '.'.join((scene_layer.name, "3ds"))
+            mesh_name = ".".join((scene_layer.name, "3ds"))
             scene_object, mvr_object = export_geometry(scene_layer, mesh_name, file_list)
             mesh_list.geometry3d.append(mvr_object)
             mesh_list.to_xml(parent=scene_object)
@@ -555,7 +555,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                 if geo.objects:
                     consize = file_path = None
                     conscale = CONVERSE.to_scale()
-                    geo_name = '.'.join((geo.name, "3ds"))
+                    geo_name = ".".join((geo.name, "3ds"))
                     for ob in geo.objects:
                         if ob.data:
                             trans = ob.data.get("Transform")
@@ -573,7 +573,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                     convertscale = sum(conscale * scale_vec) / 3
                     print("exporting Geometry3D... %s" % geo_name)
                     if file_path is None:
-                        geo_name = '.'.join((ob.name, "3ds"))
+                        geo_name = ".".join((ob.name, "3ds"))
                         file_path = os.path.join(folder_path, geo_name)
                         export_3ds(context, file_path, geo.all_objects, SELECT,
                                    APPLY_MATRIX, CONVERSE, convertscale, geo.name)
