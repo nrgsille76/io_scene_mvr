@@ -11,7 +11,7 @@ import os
 import bpy
 import time
 import mathutils
-import py_mvr as pymvr
+import pymvr
 from pathlib import Path
 from io_scene_3ds.import_3ds import load_3ds
 from .import_gdtf import fixture_build
@@ -771,15 +771,23 @@ def load_mvr(context, filename, fixpath, mscale=mathutils.Matrix(), apply=False,
     mvr_scene = pymvr.GeneralSceneDescription(filename)
     current_path = os.path.dirname(os.path.realpath(__file__))
     folderpath = os.path.join(current_path, "assets", "mvr", layers_name)
-    mvr_layers = mvr_scene.layers if hasattr(mvr_scene, "layers") else []
     extract_mvr_textures(mvr_scene, folderpath)
     print("\ncreating Scene... %s" % layers_name)
 
-    if hasattr(mvr_scene, "aux_data"):
-        auxdata = mvr_scene.aux_data
-        print("importing AUXData...")
-        classes = auxdata.classes if hasattr(auxdata, "classes") else []
-        symdefs = auxdata.symdefs if hasattr(auxdata, "symdefs") else []
+
+    if hasattr(mvr_scene, "scene") and mvr_scene.scene:
+        auxdata = mvr_scene.scene.aux_data
+        mvr_layers = mvr_scene.scene.layers
+    else:
+        auxdata = None
+        mvr_layers = []
+
+    if auxdata is not None:
+        classes = auxdata.classes
+        symdefs = auxdata.symdefs
+    else:
+        classes = []
+        symdefs = []
 
     for ob in viewlayer.objects.selected:
         ob.select_set(False)
