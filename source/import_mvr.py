@@ -19,7 +19,7 @@ from .import_gdtf import fixture_build
 
 auxData = {}
 objectData = {}
-objectMVR = {"SceneObject", "Truss"}
+objectMVR = {"SceneObject", "Truss", "Support", "Projector", "VideoScreen"}
 nodeMVR = objectMVR.add("GroupObject")
 
 
@@ -87,8 +87,10 @@ def drop_suffix(name, space=False):
 
 def create_index_tag(idx, grp=None, amt=False):
     """Create an ID tag."""
-    index_tag = subex_tag = f"{idx}"
-    if amt == 1 and isZero(idx) and notZero(grp):
+    index_tag = subex_tag = str(0)
+    if amt > 1 or isZero(grp) and notZero(idx):
+        index_tag = subex_tag = f"{idx}"
+    elif amt == 1 and isZero(idx) and notZero(grp):
         index_tag = subex_tag = f"{grp}"
     elif amt > 1 or notZero(grp) and notZero(idx):
         index_tag = f"{grp}-{idx}"
@@ -270,17 +272,23 @@ def get_clean_name(item, idx=0, grp=None):
         return layer_name
     elif check_for_digits(item.name) or item_name == mvr_cls:
         item.name = layer_name
+    if check_for_digits(item.name) and grp is None:
+        item.name = f"{item_name} {idx}"
+        if check_for_digits(item.name):
+            if item_cls == "Collection":
+                item.name = f"{item_name} 0-{idx}"
+            elif item_cls == "Object":
+                item.name = f"{item_name} 0_{idx}"
     if check_for_digits(item.name) and itsaNumber:
         if item_cls == "Collection":
-            clean_name = f"{item_name} {grp}-{idx}"
+            item.name = f"{item_name} {grp}-{idx}"
         elif item_cls == "Object":
-            clean_name = f"{item_name} {grp}_{idx}"
-        item.name = clean_name
+            item.name = f"{item_name} {grp}_{idx}"
     if check_for_digits(item.name):
         if itsaNumber:
             idsum = sum((idx, grp))
             item.name = f"{item_name} {idsum}"
-        else:
+        elif grp is not None:
             item.name = f"{item_name} {idx} {grp}"
 
 
@@ -380,6 +388,57 @@ def get_child_list(context, mscale, mvr_scene, layer, layer_idx, folderpath, ext
                            folderpath, extracted, apply, layer_collect,
                            FIXTURES, TARGETS, fixpath, fixture_group)
 
+    for support_idx, support_obj in enumerate(child_list.supports):
+        existing = check_existing(support_obj, layer_collect)
+
+        if fixture_group is None:
+            group_name = support_obj.name or "Support"
+            group_name =  get_clean_name(group_name, support_idx)
+            fixture_group = FixtureGroup(group_name, support_obj.uuid)
+
+        if not existing:
+            process_mvr_object(context, mvr_scene, support_obj, support_idx,
+                               mscale, apply, folderpath, extracted, layer_collect)
+
+        if hasattr(support_obj, "child_list") and support_obj.child_list:
+            get_child_list(context, mscale, mvr_scene, support_obj, support_idx,
+                           folderpath, extracted, apply, layer_collect,
+                           FIXTURES, TARGETS, fixpath, fixture_group)
+
+    for project_idx, project_obj in enumerate(child_list.projectors):
+        existing = check_existing(project_obj, layer_collect)
+
+        if fixture_group is None:
+            group_name = project_obj.name or "Projector"
+            group_name =  get_clean_name(group_name, project_idx)
+            fixture_group = FixtureGroup(group_name, project_obj.uuid)
+
+        if not existing:
+            process_mvr_object(context, mvr_scene, project_obj, project_idx,
+                               mscale, apply, folderpath, extracted, layer_collect)
+
+        if hasattr(project_obj, "child_list") and project_obj.child_list:
+            get_child_list(context, mscale, mvr_scene, project_obj, project_idx,
+                           folderpath, extracted, apply, layer_collect,
+                           FIXTURES, TARGETS, fixpath, fixture_group)
+
+    for screen_idx, screen_obj in enumerate(child_list.video_screens):
+        existing = check_existing(screen_obj, layer_collect)
+
+        if fixture_group is None:
+            group_name = screen_obj.name or "Screen"
+            group_name =  get_clean_name(group_name, screen_idx)
+            fixture_group = FixtureGroup(group_name, screen_obj.uuid)
+
+        if not existing:
+            process_mvr_object(context, mvr_scene, screen_obj, screen_idx,
+                               mscale, apply, folderpath, extracted, layer_collect)
+
+        if hasattr(screen_obj, "child_list") and screen_obj.child_list:
+            get_child_list(context, mscale, mvr_scene, screen_obj, screen_idx,
+                           folderpath, extracted, apply, layer_collect,
+                           FIXTURES, TARGETS, fixpath, fixture_group)
+            
     for scene_idx, scene_obj in enumerate(child_list.scene_objects):
         existing = check_existing(scene_obj, layer_collect)
 
@@ -540,7 +599,6 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, apply, f
     elif not itsaFocus and (len(geometrys) + len(symbols)) > 1:
         print("creating extra collection", idx_name)
         active_collect = data_collect.new(name)
-        active_collect["MVR Index"] = mvr_idx
         create_mvr_props(active_collect, class_name, idx_name, uid, classing)
         group_collect.children.link(active_collect)
         collection = active_collect
@@ -551,7 +609,6 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, apply, f
         if not active_collect and not len(symbols):
             reference = collection.get("UUID")
             active_collect = data_collect.new(name)
-            active_collect["MVR Index"] = mvr_idx
             create_mvr_props(active_collect, class_name, idx_name, uid, classing, reference)
 
     for geometry in geometrys:
@@ -670,13 +727,14 @@ def create_tree_branch(layer, count):
         for idc, col in enumerate(group.children):
             obs = len(col.objects)
             col_cls = col.get("MVR Class")
-            if col_cls  == "SceneObject":
+            if col_cls in objectMVR:
                 if level:
                     obtag = create_index_tag(gidx, lidx, clds)
                 else:
+                    col_name = drop_suffix(col.name)
                     obtag = create_index_tag(idc, gidx, obs)
-                    if notZero(lidx):
-                        col.name = "L%d %s" % (lidx, drop_suffix(col.name))
+                    if check_for_digits(col.name) and notZero(lidx):
+                        col.name = "L%d %s" % (lidx, col_name)
                 index_scene_object(col, idc, grp_cls, obtag)
             elif col_cls == "GroupObject":
                 get_clean_name(col, idc, gidx)
@@ -686,7 +744,7 @@ def create_tree_branch(layer, count):
     for codx, collect in enumerate(layer.children):
         if collect.get("Fixture ID") is None:
             colclass = collect.get("MVR Class")
-            if colclass == "SceneObject":
+            if colclass in objectMVR:
                 object_name = drop_suffix(collect.name)
                 if check_for_digits(collect.name):
                     object_name = "L%d %s" % (count, object_name)
