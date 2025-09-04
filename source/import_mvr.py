@@ -272,24 +272,23 @@ def get_clean_name(item, idx=0, grp=None):
         return layer_name
     elif check_for_digits(item.name) or item_name == mvr_cls:
         item.name = layer_name
-    if check_for_digits(item.name) and grp is None:
-        item.name = f"{item_name} {idx}"
-        if check_for_digits(item.name):
-            if item_cls == "Collection":
-                item.name = f"{item_name} 0-{idx}"
-            elif item_cls == "Object":
-                item.name = f"{item_name} 0_{idx}"
     if check_for_digits(item.name) and itsaNumber:
         if item_cls == "Collection":
             item.name = f"{item_name} {grp}-{idx}"
         elif item_cls == "Object":
             item.name = f"{item_name} {grp}_{idx}"
+    if check_for_digits(item.name) and grp is None:
+        item.name = f"{item_name} {idx}"
     if check_for_digits(item.name):
         if itsaNumber:
             idsum = sum((idx, grp))
             item.name = f"{item_name} {idsum}"
         elif grp is not None:
             item.name = f"{item_name} {idx} {grp}"
+        elif item_cls == "Collection":
+            item.name = f"{item_name} 0-{idx}"
+        elif item_cls == "Object":
+            item.name = f"{item_name} 0_{idx}"
 
 
 def get_mvr_name(node, index=0, layer=None):
@@ -627,9 +626,6 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, apply, f
         symbol_collect = data_collect.get(symbol.symdef)
 
         if symbol_collect:
-            sym_cnt = len(symbol_collect.objects)
-            sym_tag = create_index_tag(idx, mvr_idx, sym_cnt)
-            sym_idx = "%s %s" % (name, sym_tag)
             symbol_object = object_data.new(name, None)
             collection.objects.link(symbol_object)
             symbol_object.matrix_world = symbol_mtx
@@ -638,7 +634,7 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale, apply, f
             symbol_object.instance_type = 'COLLECTION'
             symbol_object.instance_collection = symbol_collect
             create_transform_property(symbol_object, symbol_collect)
-            create_mvr_props(symbol_object, class_name, sym_idx, uid, symbol.uuid, classing, symbol_type)
+            create_mvr_props(symbol_object, class_name, name, uid, symbol.uuid, classing, symbol_type)
             create_mvr_props(symbol_collect, symbol_type, name, symbol.uuid, classing, symbol.symdef, "Symdef")
 
     if itsaFocus:
