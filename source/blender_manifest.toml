@@ -1,9 +1,9 @@
 schema_version = "1.0.0"
 id = "io_scene_mvr"
 name = "Scene MVR (.mvr) and GDTF (.gdtf)"
-version = "1.3.6"
+version = "1.3.7"
 tagline = "My Virtual Rig and General Device Type Format"
-maintainer = "NRG Sille <nrgsille@gmx.de>"
+maintainer = "NRG Sille <getmore@nrgsille.com>"
 type = "add-on"
 tags = ["Import-Export", "Scene", "Lighting", "Tracking", "Rigging"]
 blender_version_min = "4.2.0"
@@ -27,19 +27,4 @@ paths_exclude_pattern = [
   "*.pyc",
   "__pycache__",
   "*.zip",
-  "data.json",
 ]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
