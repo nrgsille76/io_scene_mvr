@@ -807,7 +807,7 @@ def collect_attributes(channels, index, functions, logic=False):
     for channel in channels:
         if "Gobo" in channel[index]:
             has_gobos = True
-            if logic:
+            if not logic:
                 gobo_functions = channel.get(functions)
                 for function in gobo_functions:
                     wheel_function = str(function.wheel)
@@ -858,7 +858,7 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
 
     collection["UUID"] = uid
     collection["Fixture ID"] = fixture_id
-    collection["Object Class"] = profile_cls
+    collection["MVR Type"] = profile_cls
     create_gdtf_props(collection, fixturename)
     dmx_channels = collect_dmx_channels(profile, mode)
     root_geometry = pygdtf.utils.get_geometry_by_name(profile, dmx_mode.geometry)
@@ -1355,7 +1355,7 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
         create_fixture_id(main_target, fixture_id)
         create_gdtf_props(main_target, fixturename)
         main_target["Geometry Type"] = "Target"
-        main_target["Object Class"] = profile_cls
+        main_target["MVR Type"] = profile_cls
         main_target["UUID"] = target_id
         targetData[target_id] = main_target
 
@@ -1401,7 +1401,7 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
                         create_fixture_id(obj_target, fixture_id)
                         create_gdtf_props(obj_target, fixturename)
                         obj_target["Geometry Class"] = "Target"
-                        main_target["Object Class"] = profile_cls
+                        main_target["MVR Type"] = profile_cls
                         obj_target["Reference"] = obj.get("Original Name", obj.name)
                         collection.objects.link(obj_target)
                         if not center_object:
@@ -1451,8 +1451,8 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
     return collection
 
 
-def create_beam_features(assembly, blend, focus, iris, gobos, start, gel,
-                         wheels, wheelname, zoom_angle, zoom_range, root_obj):
+def create_beam_features(assembly, blend, focus, iris, gobo_data, gobo_count, start, gel,
+                         wheels, wheelname, wheel_count, zoom_angle, zoom_range, root_obj):
 
     """Create the beam effect attributes."""
     rgb_beam = root_obj.get("RGB Beam")
@@ -1496,7 +1496,7 @@ def create_beam_features(assembly, blend, focus, iris, gobos, start, gel,
             assembly.data.use_soft_falloff = False
             iris_node = nodes.new("ShaderNodeTexImage")
             iris_out = iris_node
-            if gobos:
+            if gobo_data:
                 iris_mix = nodes.new("ShaderNodeMixRGB")
                 links.new(iris_node.outputs[0], iris_mix.inputs[2])
                 links.new(light_path.outputs[7], iris_mix.inputs[0])
@@ -1516,7 +1516,7 @@ def create_beam_features(assembly, blend, focus, iris, gobos, start, gel,
             light_output.location = (500, 300)
             lightfalloff.location = (-300, 220)
             lightcontrast.location = (-100, 360)
-        if gobos and start is not None:
+        if gobo_data and start is not None:
             assembly.data.shadow_buffer_clip_start = 0.001
             assembly.location[2] += 0.01
             wheel_node = nodes.new("ShaderNodeTexImage")
@@ -1589,7 +1589,7 @@ def create_beam_features(assembly, blend, focus, iris, gobos, start, gel,
                 assembly.location[2] += -0.02
         if iris:
             links.new(iris_out.outputs[0], gamma_node.inputs[0])
-            if gobos:
+            if gobo_data:
                 links.new(pre_node.outputs[0], iris_mix.inputs[1])
     elif assembly.type == 'MESH' and len(assembly.data.materials):
         if assembly.get("Geometry Type") == "Beam":
@@ -1631,7 +1631,7 @@ def create_beam_features(assembly, blend, focus, iris, gobos, start, gel,
                 opacity_node = gobo_nodes.new("ShaderNodeBsdfTransparent")
                 opacity_node.label = opacity_node.name = "Wheel Shader"
                 previous_node = None
-                if gobos:
+                if gobo_count:
                     wheel_node = gobo_nodes.new("ShaderNodeTexImage")
                     wheel_rota = gobo_nodes.new("ShaderNodeVectorRotate")
                     wheel_rota.label = wheel_rota.name = "%s Rotate" % wheelname
@@ -1807,8 +1807,8 @@ def fixture_build(context, filename, mscale, fixname, position, focus_point, fix
     layer_collect = viewlayer.layer_collection
     gdtf_profile = pygdtf.FixtureType(filename)
     uid = gdtf_profile.fixture_type_id
-    has_gobos =  False
     random_gobo = None
+    has_gobos = False
     channels = []
 
     if fixture:
@@ -1878,10 +1878,10 @@ def fixture_build(context, filename, mscale, fixname, position, focus_point, fix
 
     linkDict = {}
     wheel_name = ""
-    start_gobo = None
-    check_wheels = wheel_count = False
+    gobo_data = start_gobo = None
     base = get_root_model(model_collection)
     head = get_tilt(model_collection, channels)
+    gobo_count = wheel_count = check_wheels = False
     random_glow = [random.uniform(0.0, 1.0) for _ in range(3)]
     if len(wheels):
         has_gobos = True
@@ -1983,8 +1983,8 @@ def fixture_build(context, filename, mscale, fixname, position, focus_point, fix
                     if check_color:
                         linkDict[child.name]["RGB"] = True
                 child.name = index_name(child.name)
-            create_beam_features(obj, has_blend, has_focus, has_iris, has_gobos, start_gobo, gelcolor,
-                                 check_wheels, wheel_name, zoom_angle, zoom_range, root_object)
+            create_beam_features(obj, has_blend, has_focus, has_iris, gobo_data, gobo_count, start_gobo, gelcolor,
+                                 check_wheels, wheel_name, wheel_count, zoom_angle, zoom_range, root_object)
 
             if obj.get("Use Root"):
                 for parents in obj.children_recursive:
