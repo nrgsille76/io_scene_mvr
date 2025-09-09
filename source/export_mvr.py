@@ -751,7 +751,7 @@ def save(operator, context, filepath="", collection="", scale_factor=1.0, use_se
     depsgraph = context.evaluated_depsgraph_get()
 
     if use_collection:
-        items = layer.active_layer_collection.collection
+        items = viewlayer.active_layer_collection.collection
     elif collection:
         item_collection = bpy.data.collections.get(collection)
         if item_collection:
