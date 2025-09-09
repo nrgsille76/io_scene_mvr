@@ -94,7 +94,10 @@ def remove_layer_tag(name):
         if check_name and check_space:
             split_name = name.split()
             if len(split_name) >= 2:
-                item_name = " ".join(split_name[1:])
+                if split_name[-1].isdigit():
+                    item_name = " ".join(split_name[1:-1])
+                else:
+                    item_name = " ".join(split_name[1:])
             elif split_len == 2:
                 item_name = split_name[1]
 
@@ -203,7 +206,7 @@ def get_material_images(material, path):
 
 def create_layer(layername, node, node_cls, uid=None, parents=[]):
     """Create a xml layer or group."""
-    if node_cls is None or node_cls != "Layer":
+    if node_cls is None or node_cls == "LayersElement":
         if uid:
             layer = pymvr.Layer(name=layername, uuid=uid)
         else:
@@ -507,27 +510,16 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
         return geometry, transmtx, filelist
 
 
-    def create_scene_object(collect, node, node_cls, layerlist, filelist, single=False):
-        group = node
-        group_cls = node_cls
-        grouplist = layerlist
+    def create_scene_object(collect, grouplist, filelist, single=False):
         grp_uid = collect.get("UUID")
         vcls = collect.get("Classing")
-        grp_name = get_mvr_name(collect)
         geometries = pymvr.Geometries()
+        grp_name = get_mvr_name(collect)
         grp_cls = collect.get("MVR Class")
-        hasObjects = bool(collect.objects)
-        parentGroup = node_cls == "GroupObject"
-        isGroup = parentGroup and grp_cls == "GroupObject"
-        itsaGroup = bool(collect.children) or any((ob.is_instancer for ob in collect.objects))
-        if isGroup or parentGroup and itsaGroup:
-            group, group_cls, grouplist = create_layer(grp_name, node, node_cls, grp_uid, layerlist)
-            print("exporting %s... %s" % (grp_cls, grp_name))
 
 
         def create_geometry(meshcol, meshes, files, xml_cls):
-            obj_name = get_mvr_name(meshcol)
-            print("creating SceneObject... %s" % obj_name)
+            print("creating %s... %s" % (grp_cls, grp_name))
             for mesh in meshcol.objects:
                 unselected = SELECT and not geo.select_get()
                 if not unselected and mesh.type not in objectStudio and mesh.parent is None:
@@ -537,31 +529,37 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                         filename = ".".join((mesh.data.name if mesh.data else mesh_name, "3ds"))
                         geometry, mtx, filelist = export_geometry(mesh, filename, files)
                         meshes.geometry3d.append(geometry)
-            scene_object = xml_cls(name=obj_name, uuid=grp_uid, matrix=mtx, classing=vcls).to_xml()
+            scene_object = xml_cls(name=grp_name, uuid=grp_uid, matrix=mtx, classing=vcls).to_xml()
             meshes.to_xml(parent=scene_object)
             grouplist.append(scene_object)
             geometries.geometry3d.clear()
 
 
         def create_symbol(symcol, instances, files, xml_cls):
-            symcol_name = get_mvr_name(symcol)
-            print("creating SceneObject... %s" % symcol_name)
             for insta in symcol.objects:
                 unselected = SELECT and not obj.select_get()
                 if not unselected and insta.type not in objectStudio and insta.parent is None:
                     insta_name = get_mvr_name(insta)
                     insta_type = insta.get("MVR Type")
-                    print("creating %s... %s" % (insta_type, insta_name))
+                    insta_cls = insta.get("MVR Class")
+                    print("creating %s... %s" % (insta_cls, insta_name))
                     if insta.is_instancer and insta.data is None:
+                        instatype = instances.symbol
                         symbol, mtx, filelist = export_symbol(insta, files)
-                        instances.symbol.append(symbol)
-                        scene_object = xml_cls(name=insta_name, uuid=grp_uid, matrix=mtx, classing=vcls).to_xml()
-                        instances.to_xml(parent=scene_object)
-                        grouplist.append(scene_object)
-                        geometries.symbol.clear()
+                        instatype.append(symbol)
+                    else:
+                        instatype = instances.geometry3d
+                        filename = ".".join((insta.data.name if insta.data else insta_name, "3ds"))
+                        geometry, mtx, filelist = export_geometry(insta, filename, files)
+                        instatype.append(geometry)
+                    scene_object = xml_cls(name=insta_name, uuid=grp_uid,
+                                           matrix=mtx, classing=vcls).to_xml()
+                    instances.to_xml(parent=scene_object)
+                    grouplist.append(scene_object)
+                    instatype.clear()
 
 
-        if hasObjects:
+        if bool(collect.objects):
             if grp_cls is not None:
                 obj_cls = "SceneObject"
                 xml_cls = pymvr.SceneObject
@@ -573,7 +571,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                     mvr_matrix = Matrix(get_transmatrix(scene_mtx))
                     obj_cls = next((ob.get("MVR Class") for ob in collect.objects), "SceneObject")
                     xml_cls = getattr(pymvr, obj_cls, "SceneObject")
-                if itsaGroup:
+                if bool(collect.children) or any((ob.is_instancer for ob in collect.objects)):
                     create_symbol(collect, geometries, filelist, xml_cls)
                 else:
                     create_geometry(collect, geometries, filelist, xml_cls)
@@ -616,19 +614,15 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                 geometries.geometry3d.clear()
                 geometries.symbol.clear()
 
-        return group, group_cls, grouplist, filelist
+        return grouplist, filelist
 
 
-    def export_collection(item, layer, lay_cls, laylist, filelist, single=True):
-        group = layer
-        grp_cls = lay_cls
-        grplist = laylist
-        item_name = get_mvr_name(item)
-        if item.get("MVR Class"):
-            grp_info = create_scene_object(item, layer, lay_cls, laylist, filelist)
-        else:
-            grp_info = create_scene_object(item, layer, lay_cls, laylist, filelist, single)
-        group, grp_cls, grplist, filelist = grp_info
+    def export_collection(item, layer, lay_cls, laylist, filelist, single=False):
+        if bool(item.objects):
+            if item.get("MVR Class"):
+                laylist, filelist = create_scene_object(item, laylist, filelist)
+            else:
+                laylist, filelist = create_scene_object(item, laylist, filelist, single)
         for child in item.children:
             cld_uid = child.get("UUID")
             childname = get_mvr_name(child)
@@ -638,12 +632,16 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                 continue
             isFixture = child.get("Company")
             if FIXTURES and cld_uid and isFixture:
-                grplist, filelist = export_fixture(child, grplist, filelist)
+                laylist, filelist = export_fixture(child, laylist, filelist)
             elif not isFixture:
-                if child.objects and not child.children:
-                    export_collection(child, group, grp_cls, grplist, filelist, True)
+                if lay_cls in layerMVR and bool(child.children) or any((ob.is_instancer for ob in child.objects)):
+                    group, grp_cls, grplist = create_layer(childname, layer, lay_cls, cld_uid, laylist)
+                    print("exporting %s... %s" % (cld_cls, childname))
+                    export_collection(child, group, layers_cls, grplist, filelist)
+                elif child.objects and not child.children:
+                    export_collection(child, layer, lay_cls, laylist, filelist, True)
                 else:
-                    export_collection(child, group, grp_cls, grplist, filelist, False)
+                    export_collection(child, layer, lay_cls, laylist, filelist)
 
 
     def collect_layers(laycols, node, node_cls, filelist):
@@ -660,7 +658,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
             else:
                 layer, layer_cls, layerlist = create_layer(laycol_name, node, node_cls, laycol_uid)
                 print("exporting %s... %s" % (layer_cls, laycol_name))
-                export_collection(laycol, layer, layer_cls, layerlist, filelist)
+                export_collection(laycol, layer, layer_cls, layerlist, filelist, True)
 
 
     items_uid = items.get("UUID")
@@ -725,14 +723,12 @@ def save_mvr(context, items, filename, fixturepath="", scale_factor=1.0,
     folder_path = os.path.join(asset_path, Path(filename).stem)
     Path(folder_path).mkdir(parents=True, exist_ok=True)
 
-
-    scene, file_list = export_mvr(context, items, filename, fixturepath, folder_path,
+    try:
+        scene, file_list = export_mvr(context, items, filename, fixturepath, folder_path,
                                       asset_path, scalefactor, SELECT, IMAGES, FIXTURES,
                                       TARGETS, CONVERSE, APPLY_MATRIX, VERSION)
-    '''
     except Exception as exc:
         print(exc)
-    '''
 
     if os.path.isdir(folder_path):
         [fl.unlink() for fl in Path(folder_path).iterdir() if fl.is_file()]
