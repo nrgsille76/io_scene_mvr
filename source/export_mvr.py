@@ -166,7 +166,6 @@ def get_material_images(material, path):
     """Collect material textures."""
     images = []
 
-
     def get_image(image):
         if image:
             img_name = Path(image.filepath).name
@@ -174,7 +173,6 @@ def get_material_images(material, path):
             if image.has_data and not os.path.isfile(file_path):
                 image.save(filepath=file_path)
                 images.append((file_path, img_name))
-
 
     if (material and material.node_tree and not
         (material.get("Geometry Type") == "Gobo")
@@ -260,9 +258,9 @@ def get_fixture(context, fixture, specs, file_list, folders, scale, SELECT, TARG
     props = ["Patch Break", "Patch Universe", "Patch Address"]
     base = next((ob for ob in fixture.objects if ob.get("Use Root")), None)
     target = next((ob for ob in fixture.objects if ob.get("Geometry Type") == "Target"), None)
-    fix_id = fixture.get("Fixture ID")
+    trs_mtx = Matrix(get_transmatrix(CONVERSE, base))
     fix_mode = base.get("Fixture Mode")
-    transmtx = Matrix(get_transmatrix(CONVERSE, base))
+    fix_id = fixture.get("Fixture ID")
 
     if target and TARGETS:
         focus_objects = []
@@ -299,11 +297,11 @@ def get_fixture(context, fixture, specs, file_list, folders, scale, SELECT, TARG
             geometries.to_xml(parent=focus_point)
         geometries.geometry3d.clear()
         geometries.symbol.clear()
-        fix_object = pymvr.Fixture(name=fixture_name, uuid=uid, gdtf_spec=specs, gdtf_mode=fix_mode, matrix=transmtx,
+        fix_object = pymvr.Fixture(name=fixture_name, uuid=uid, gdtf_spec=specs, gdtf_mode=fix_mode, matrix=trs_mtx,
                                    fixture_id=str(fix_id), fixture_id_numeric=fix_id, focus=target_uid)
     else:
         fix_object = pymvr.Fixture(name=fixture_name, uuid=uid, gdtf_spec=specs, gdtf_mode=fix_mode,
-                                   matrix=transmtx, fixture_id=str(fix_id), fixture_id_numeric=fix_id)
+                                   matrix=trs_mtx, fixture_id=str(fix_id), fixture_id_numeric=fix_id)
 
     fix_object.addresses.clear()
     for prop in props:
@@ -517,7 +515,6 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
         grp_name = get_mvr_name(collect)
         grp_cls = collect.get("MVR Class")
 
-
         def create_geometry(meshcol, meshes, files, xml_cls):
             print("creating %s... %s" % (grp_cls, grp_name))
             for mesh in meshcol.objects:
@@ -533,7 +530,6 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
             meshes.to_xml(parent=scene_object)
             grouplist.append(scene_object)
             geometries.geometry3d.clear()
-
 
         def create_symbol(symcol, instances, files, xml_cls):
             for insta in symcol.objects:
@@ -557,7 +553,6 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                     instances.to_xml(parent=scene_object)
                     grouplist.append(scene_object)
                     instatype.clear()
-
 
         if bool(collect.objects):
             if grp_cls is not None:
@@ -745,10 +740,8 @@ def save(operator, context, filepath="", collection="", scale_factor=1.0, use_se
     if global_matrix is None:
         global_matrix = mathutils.Matrix()
 
-    scene = context.scene
     viewlayer = context.view_layer
     items = viewlayer.layer_collection.collection
-    depsgraph = context.evaluated_depsgraph_get()
 
     if use_collection:
         items = viewlayer.active_layer_collection.collection
