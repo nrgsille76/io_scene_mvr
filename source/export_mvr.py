@@ -572,7 +572,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                     create_geometry(collect, geometries, filelist, xml_cls)
             elif single:
                 if any((ob.type in objectStudio for ob in collect.objects)):
-                    grp_list, filelist = create_studio_object(grp_name, grp_list, filelist)
+                    grouplist, filelist = create_studio_object(grp_name, grouplist, filelist)
                 for obj in collect.objects:
                     unselected = SELECT and not obj.select_get()
                     if not unselected and obj.type not in objectStudio and obj.parent is None:
@@ -631,8 +631,8 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
             elif not isFixture:
                 if lay_cls in layerMVR and bool(child.children) or any((ob.is_instancer for ob in child.objects)):
                     group, grp_cls, grplist = create_layer(childname, layer, lay_cls, cld_uid, laylist)
-                    print("exporting %s... %s" % (cld_cls, childname))
-                    export_collection(child, group, layers_cls, grplist, filelist)
+                    print("exporting %s... %s" % (grp_cls, childname))
+                    export_collection(child, group, grp_cls, grplist, filelist)
                 elif child.objects and not child.children:
                     export_collection(child, layer, lay_cls, laylist, filelist, True)
                 else:
