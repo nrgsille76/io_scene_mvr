@@ -10,8 +10,8 @@
 import os
 import bpy
 import time
+import pymvr
 import mathutils
-import py_mvr as pymvr
 from pathlib import Path
 from io_scene_3ds.import_3ds import load_3ds
 from .import_gdtf import fixture_build
@@ -795,7 +795,8 @@ def load_mvr(context, filename, fixpath, mscale=mathutils.Matrix(),
 
     symdefs = []
     extracted = {}
-    importLayer = None
+    auxdata = None
+    mvr_layers = []
     imported_layers = []
     start_time = time.time()
     viewlayer = context.view_layer
@@ -817,12 +818,15 @@ def load_mvr(context, filename, fixpath, mscale=mathutils.Matrix(),
     for ob in viewlayer.objects.selected:
         ob.select_set(False)
 
-    if hasattr(mvr_scene, "aux_data"):
-        auxdata = mvr_scene.aux_data
+    if hasattr(mvr_scene, "scene") and mvr_scene.scene:
+        auxdata = mvr_scene.scene.aux_data
+        mvr_layers = mvr_scene.scene.layers
+
+    classes = auxdata.classes if auxdata is not None else []
+    symdefs = auxdata.symdefs if auxdata is not None else []
+
+    if auxdata is not None:
         print("importing AUXData...")
-        classes = auxdata.classes if hasattr(auxdata, "classes") else []
-        symdefs = auxdata.symdefs if hasattr(auxdata, "symdefs") else []
-            
         for cls in classes:
             classData[cls.uuid] = cls.name
 
