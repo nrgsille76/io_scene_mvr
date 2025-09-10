@@ -691,7 +691,6 @@ def finalize_objects(layers, mscale):
                 else:
                     create_transform_property(obj)
 
-
     def collect_objects(childlist):
         for truss in childlist.trusses:
             transform_matrix(truss)
@@ -703,7 +702,6 @@ def finalize_objects(layers, mscale):
             if hasattr(group, "child_list") and group.child_list:
                 collect_objects(group.child_list)
 
-
     for layer in layers:
         if hasattr(layer, "child_list") and layer.child_list:
             collect_objects(layer.child_list)
@@ -714,7 +712,6 @@ def create_tree_branch(layers, count):
     layers_cls = layers.get("MVR Class")
     if layers.get("MVR Index"):
         count = layers.get("MVR Index")
-
 
     def provide_geometries(geometries, tag, lyr=False, prt=None):
         """Treat collection objects."""
@@ -733,7 +730,6 @@ def create_tree_branch(layers, count):
             if check_for_digits(obj.name):
                 create_layer_tag(obj, count)
                 get_clean_name(obj, obx, tag)
-
 
     def index_scene_object(col, idx, cdx, gcls, tag=None, level=False):
         """Index scene object collections."""
@@ -758,7 +754,6 @@ def create_tree_branch(layers, count):
             else:
                 get_clean_name(col, cdx)
 
-
     def index_group_object(group, gidx, lidx, level=False):
         """Index group collections."""
         objs = len(group.objects)
@@ -778,7 +773,6 @@ def create_tree_branch(layers, count):
             elif colcls == "GroupObject":
                 get_clean_name(col, idc, gidx)
                 index_group_object(col, idc, gidx, True)
-
 
     provide_geometries(layers, count, True)
     for lidx, layer in enumerate(layers.children):
