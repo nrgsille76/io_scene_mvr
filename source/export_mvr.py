@@ -313,6 +313,7 @@ def get_fixture(context, fixture, specs, file_list, folders, scale, SELECT, TARG
 def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, scalefactor,
                SELECT, IMAGES, FIXTURES, TARGETS, CONVERSE, APPLY_MATRIX, VERSION):
     """Export MVR xml tree."""
+    data_collections = bpy.data.collections
     scene_collection = context.scene.collection
     blend_file = Path(bpy.data.filepath).stem
     layers_name = Path(filename).stem
@@ -443,9 +444,9 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
         if sym_ref is None:
             sym_ref = sym_defs.get(sym.instance_collection.name)
         if transform is None:
-            transmtx = Matrix(get_transmatrix(CONVERSE, sym))
+            transmtx = pymvr.Matrix(get_transmatrix(CONVERSE, sym))
         else:
-            transmtx = Matrix(get_transmatrix(transform))
+            transmtx = pymvr.Matrix(get_transmatrix(transform))
         print("adding Symbol... %s" % symbol_name)
         symbol = pymvr.Symbol(uuid=sym_uid, symdef=sym_ref)
 
@@ -521,9 +522,9 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                 meshlist, files = create_studio_object(grp_name, meshlist, files)
             else:
                 mesh_mtx = meshcol.get("Transform")
-                mtx = Matrix(get_transmatrix(CONVERSE))
+                mtx = pymvr.Matrix(get_transmatrix(CONVERSE))
                 if mesh_mtx is not None:
-                    mtx = Matrix(get_transmatrix(mesh_mtx))
+                    mtx = pymvr.Matrix(get_transmatrix(mesh_mtx))
                 for mesh in meshcol.objects:
                     unselected = SELECT and not geo.select_get()
                     if not unselected and mesh.type not in objectStudio and mesh.parent is None:
@@ -533,9 +534,9 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                             filename = ".".join((mesh.data.name if mesh.data else mesh_name, "3ds"))
                             geometry, mtx, filelist = export_geometry(mesh, filename, files)
                             meshes.geometry3d.append(geometry)
-            scene_object = xmlcls(name=grp_name, uuid=grp_uid, matrix=mtx, classing=vcls)
-            scene_object.geometries = meshes
-            meshlist.scene_objects.append(scene_object)
+                scene_object = xmlcls(name=grp_name, uuid=grp_uid, matrix=mtx, classing=vcls)
+                scene_object.geometries = meshes
+                meshlist.scene_objects.append(scene_object)
 
         def create_symbol(symcol, instances, instalist, files, xmlcls):
             for insta in symcol.objects:
@@ -546,7 +547,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                     print("creating %s... %s" % (insta_cls, insta_name))
                     if insta.is_instancer and insta.data is None:
                         instatype = instances.symbol
-                        symbol, mtx, filelist = export_symbol(insta)
+                        symbol, mtx = export_symbol(insta)
                         instatype.append(symbol)
                     else:
                         instatype = instances.geometry3d
@@ -591,7 +592,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                         if obj.is_instancer and obj.instance_collection and obj.data is None:
                             meshes = geometries.symbol
                             mesh_name = obj_name
-                            mvr_object, mvr_matrix, filelist = export_symbol(obj)
+                            mvr_object, mvr_matrix = export_symbol(obj)
                         else:
                             meshes = geometries.geometry3d
                             mesh_name = ".".join((obj.data.name if obj.data else obj_name, "3ds"))
