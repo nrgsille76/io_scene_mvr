@@ -19,7 +19,6 @@ from bpy_extras import node_shader_utils
 from io_scene_3ds.export_3ds import save_3ds
 
 
-classData = None
 mixType = {'MIX', 'MIX_RGB'}
 objectStudio = {'LIGHT', 'CAMERA'}
 objectGeometry = {'MESH', 'EMPTY'}
@@ -92,9 +91,13 @@ def remove_layer_tag(name):
         check_name = name[0] == "L" and name[1].isdigit()
         if check_name and check_space:
             split_name = name.split()
-            if len(split_name) >= 2:
+            splen = len(split_name)
+            if splen >= 2:
                 if split_name[-1].isdigit():
-                    item_name = " ".join(split_name[1:-1])
+                    if splen >= 3 and split_name[-2].isdigit():
+                        item_name = " ".join(split_name[1:-2])
+                    else:
+                        item_name = " ".join(split_name[1:-1])
                 else:
                     item_name = " ".join(split_name[1:])
             elif split_len == 2:
@@ -272,7 +275,7 @@ def get_fixture(context, fixture, specs, file_list, folders, scale, SELECT, TARG
                     focus_objects.append(obj)
         focus_point = pymvr.FocusPoint(uuid=target_uid, name=focus_name, matrix=focus_mtx)
         if len(focus_objects):
-            print("exporting Geometry3D... %s" % target_mesh)
+            print("adding Geometry3D... %s" % target_mesh)
             quantity = mathutils.Vector.Fill(3, len(focus_objects))
             size = mathutils.Vector(tuple(factor[i] / quantity[i] for i in range(3)))
             mvr_object = pymvr.Geometry3D(file_name=target_mesh)
@@ -314,8 +317,9 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
     blend_file = Path(bpy.data.filepath).stem
     layers_name = Path(filename).stem
     scene_name = context.scene.name
+    classData = None
     file_list = []
-    sym_defs = []
+    sym_defs = {}
 
     print("\ncreating Scene... %s" % blend_file)
     mvr = pymvr.GeneralSceneDescriptionWriter()
@@ -350,14 +354,13 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
 
 
     def create_studio_object(studiolayer, child_list, filelist, studiolist=[]):
-        print("creating SceneObject... 3DStudio %s" % studiolayer)
         if "3DStudio" in studiolayer:
             studiolayer = drop_suffix(studiolayer)
         studio_name = " ".join((studiolayer, "3DStudio"))
         studio_file = ".".join((studio_name, "3ds"))
         transmtx = pymvr.Matrix(get_transmatrix(CONVERSE))
         stuff = pymvr.Geometry3D(file_name=studio_file)
-        print("exporting Geometry3D... %s" % studio_file)
+        print("adding Geometry3D... %s" % studio_file)
         file_path = os.path.join(folder_path, studio_file)
         scene_object = pymvr.SceneObject(name=studio_name, matrix=transmtx)
         export_3ds(context, file_path, studiolist, SELECT, APPLY_MATRIX,
@@ -371,70 +374,82 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
 
 
     def create_symdef(collect, symdef_uid, filelist):
-        print("creating Symdef... %s" % collect.name)
         sym_def = pymvr.Symdef(uuid=symdef_uid, name=collect.name)
         sym_list = pymvr.ChildList()
         sym_def.child_list = sym_list
-        for geo in collect.children:
-            if geo.objects:
-                consize = file_path = None
-                conscale = CONVERSE.to_scale()
-                geo_name = geo.name
-                for obj in geo.objects:
-                    if obj.data:
-                        trans = obj.data.get("Transform")
-                        geo_name = obj.data.get("Reference")
-                        if geo_name is None:
-                            geo_name = obj.data.name
-                        if trans:
-                            consize = mathutils.Vector((trans[0], trans[4], trans[8]))
-                        elif consize is None:
-                            consize = obj.matrix_world.copy().to_scale() 
-                        geo_path = get_filepath(geo_name, asset_path)
-                        if file_path is None and geo_path is not None:
-                            file_path = geo_path
-                        if consize is not None:
-                            conscale = consize
-                        filelist.extend(get_material_images(obj.active_material, folder_path))
-                convertscale = sum(conscale * scale_vec) / 3
-                print("exporting Geometry3D... %s" % geo_name)
-                if file_path is None:
-                    if geo_name.endswith(".3ds"):
-                        mesh_name = geo_name
-                    else:
-                        mesh_name = ".".join((geo_name, "3ds"))
-                    file_path = os.path.join(folder_path, mesh_name)
-                    export_3ds(context, file_path, geo.all_objects, SELECT,
-                               APPLY_MATRIX, CONVERSE, convertscale, geo_name)
-                geometry = pymvr.Geometry3D(file_name=geo_name)
-                filelist.append((file_path, geo_name))
-                sym_list.append(geometry)
+        geometry_name = collect.name
+        consize = scalefactor
+        path_list = filelist
+
+        def collect_objects(geometry):
+            geo_name = geometry.name
+            meshsize = meshpath = None
+            conscale = CONVERSE.to_scale()
+            for obj in geometry.objects:
+                if obj.data and obj.parent is None:
+                    trs_mtx = obj.data.get("Transform")
+                    geo_name = obj.data.get("Reference")
+                    if geo_name is None:
+                        geo_name = obj.data.name
+                    if trs_mtx:
+                        meshsize = mathutils.Vector((trs_mtx[0], trs_mtx[4], trs_mtx[8]))
+                    elif meshsize is None:
+                        meshsize = obj.matrix_world.copy().to_scale() 
+                    geo_path = get_filepath(geo_name, asset_path)
+                    if meshpath is None and geo_path is not None:
+                        meshpath = geo_path
+                    if meshsize is not None:
+                        conscale = meshsize
+                    filelist.extend(get_material_images(obj.active_material, folder_path))
+
+            return geo_name, conscale, meshpath
+
+        def export_symdef(geo, name, size, path, pathlist):
+            convertscale = sum(size * scale_vec) / 3
+            if name.endswith(".3ds"):
+                mesh_name = name
+            else:
+                mesh_name = ".".join((name, "3ds"))
+            print("adding Geometry3D... %s" % mesh_name)
+            if path is None:
+                path = os.path.join(folder_path, mesh_name)
+                export_3ds(context, path, geo.all_objects, SELECT,
+                           APPLY_MATRIX, CONVERSE, convertscale, geo.name)
+            geometry = pymvr.Geometry3D(file_name=mesh_name)
+            pathlist.append((path, mesh_name))
+            sym_list.append(geometry)
+
+            return pathlist
+
+        if collect.children:
+            for geo in collect.children:
+                if geo.objects:
+                    geometry_name, consize, file_path = collect_objects(geo)
+                    path_list = export_symdef(geo, geometry_name, consize, file_path, filelist)
+        elif collect.objects:
+            geometry_name, consize, file_path = collect_objects(collect)
+            path_list = export_symdef(collect, geometry_name, consize, file_path, filelist)
 
         return sym_def, filelist
 
 
-    def export_symbol(sym, filelist):
+    def export_symbol(sym):
         sym_uid = sym.get("UUID")
         sym_ref = sym.get("Reference")
         transform = sym.get("Transform")
         symbol_name = get_mvr_name(sym)
-        instance = sym.instance_collection
-        insta_ref = instance.get("Reference")
-        insta_name = get_mvr_name(instance)
+        if sym_uid is None:
+            sym_uid = str(pyuid.uuid4())
         if sym_ref is None:
-            sym_ref = str(pyuid.uuid4())
+            sym_ref = sym_defs.get(sym.instance_collection.name)
         if transform is None:
-            transmtx = pymvr.Matrix(get_transmatrix(CONVERSE, sym))
+            transmtx = Matrix(get_transmatrix(CONVERSE, sym))
         else:
-            transmtx = pymvr.Matrix(get_transmatrix(transform))
+            transmtx = Matrix(get_transmatrix(transform))
         print("adding Symbol... %s" % symbol_name)
-        if insta_ref is None:
-            insta_ref = sym_ref
-            symdef, filelist = create_symdef(instance, insta_ref, filelist)
-            symdefs.append(symdef)
-        symbol = pymvr.Symbol(uuid=sym_ref, symdef=insta_ref)
+        symbol = pymvr.Symbol(uuid=sym_uid, symdef=sym_ref)
 
-        return symbol, transmtx, filelist
+        return symbol, transmtx
 
 
     def export_geometry(scene_obj, obj_name, filelist):
@@ -500,41 +515,47 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
         grp_name = get_mvr_name(collect)
         grp_cls = collect.get("MVR Class")
 
-        def create_geometry(meshcol, meshes, files, xml_cls):
+        def create_geometry(meshcol, meshes, meshlist, files, xmlcls):
             print("creating %s... %s" % (grp_cls, grp_name))
-            for mesh in meshcol.objects:
-                unselected = SELECT and not geo.select_get()
-                if not unselected and mesh.type not in objectStudio and mesh.parent is None:
-                    if mesh.type in objectGeometry and not mesh.is_instancer:
-                        mesh_name = get_mvr_name(mesh)
-                        mesh_type = meshcol.get("MVR Type")
-                        filename = ".".join((mesh.data.name if mesh.data else mesh_name, "3ds"))
-                        geometry, mtx, filelist = export_geometry(mesh, filename, files)
-                        meshes.geometry3d.append(geometry)
-            scene_object = xml_cls(name=grp_name, uuid=grp_uid, matrix=mtx, classing=vcls)
+            if all((ob.type in objectStudio for ob in meshcol.objects)):
+                meshlist, files = create_studio_object(grp_name, meshlist, files)
+            else:
+                mesh_mtx = meshcol.get("Transform")
+                mtx = Matrix(get_transmatrix(CONVERSE))
+                if mesh_mtx is not None:
+                    mtx = Matrix(get_transmatrix(mesh_mtx))
+                for mesh in meshcol.objects:
+                    unselected = SELECT and not geo.select_get()
+                    if not unselected and mesh.type not in objectStudio and mesh.parent is None:
+                        if mesh.type in objectGeometry and not mesh.is_instancer:
+                            mesh_name = get_mvr_name(mesh)
+                            mesh_type = meshcol.get("MVR Type")
+                            filename = ".".join((mesh.data.name if mesh.data else mesh_name, "3ds"))
+                            geometry, mtx, filelist = export_geometry(mesh, filename, files)
+                            meshes.geometry3d.append(geometry)
+            scene_object = xmlcls(name=grp_name, uuid=grp_uid, matrix=mtx, classing=vcls)
             scene_object.geometries = meshes
-            grouplist.scene_objects.append(scene_object)
+            meshlist.scene_objects.append(scene_object)
 
-        def create_symbol(symcol, instances, files, xml_cls):
+        def create_symbol(symcol, instances, instalist, files, xmlcls):
             for insta in symcol.objects:
                 unselected = SELECT and not obj.select_get()
                 if not unselected and insta.type not in objectStudio and insta.parent is None:
                     insta_name = get_mvr_name(insta)
-                    insta_type = insta.get("MVR Type")
                     insta_cls = insta.get("MVR Class")
                     print("creating %s... %s" % (insta_cls, insta_name))
                     if insta.is_instancer and insta.data is None:
                         instatype = instances.symbol
-                        symbol, mtx, filelist = export_symbol(insta, files)
+                        symbol, mtx, filelist = export_symbol(insta)
                         instatype.append(symbol)
                     else:
                         instatype = instances.geometry3d
                         filename = ".".join((insta.data.name if insta.data else insta_name, "3ds"))
                         geometry, mtx, filelist = export_geometry(insta, filename, files)
                         instatype.append(geometry)
-                    scene_object = xml_cls(name=insta_name, uuid=grp_uid, matrix=mtx, classing=vcls)
+                    scene_object = xmlcls(name=insta_name, uuid=grp_uid, matrix=mtx, classing=vcls)
                     scene_object.geometries = instances
-                    grouplist.scene_objects.append(scene_object)
+                    instalist.scene_objects.append(scene_object)
 
         if bool(collect.objects):
             if grp_cls is not None:
@@ -549,20 +570,20 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                     obj_cls = next((ob.get("MVR Class") for ob in collect.objects), "SceneObject")
                     xml_cls = getattr(pymvr, obj_cls, "SceneObject")
                 if bool(collect.children) or any((ob.is_instancer for ob in collect.objects)):
-                    create_symbol(collect, geometries, filelist, xml_cls)
+                    create_symbol(collect, geometries, grouplist, filelist, xml_cls)
                 else:
-                    create_geometry(collect, geometries, filelist, xml_cls)
+                    create_geometry(collect, geometries, grouplist, filelist, xml_cls)
             elif single:
                 if any((ob.type in objectStudio for ob in collect.objects)):
+                    print("creating 3DStudio... %s" % grp_name)
                     grouplist, filelist = create_studio_object(grp_name, grouplist, filelist)
                 for obj in collect.objects:
                     unselected = SELECT and not obj.select_get()
                     if not unselected and obj.type not in objectStudio and obj.parent is None:
                         lay_cls = "SceneObject"
-                        obj_name = get_mvr_name(obj)
-                        obj_typ = obj.get("MVR Type")
-                        obj_cls = obj.get("MVR Class")
                         xml_cls = pymvr.SceneObject
+                        obj_name = get_mvr_name(obj)
+                        obj_cls = obj.get("MVR Class")
                         if obj_cls in objectMVR:
                             xml_cls = getattr(pymvr, obj_cls, lay_cls)
                             lay_cls = obj_cls
@@ -570,7 +591,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                         if obj.is_instancer and obj.instance_collection and obj.data is None:
                             meshes = geometries.symbol
                             mesh_name = obj_name
-                            mvr_object, mvr_matrix, filelist = export_symbol(obj, filelist)
+                            mvr_object, mvr_matrix, filelist = export_symbol(obj)
                         else:
                             meshes = geometries.geometry3d
                             mesh_name = ".".join((obj.data.name if obj.data else obj_name, "3ds"))
@@ -602,7 +623,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
             childname = get_mvr_name(child)
             cldtype = child.get("MVR Type")
             cld_cls = child.get("MVR Class")
-            if (cld_cls == "AUXData") or (childname == "AUXData"):
+            if "AUXData" in (cld_cls, childname) or child.name in sym_defs.keys():
                 continue
             isFixture = child.get("Company")
             if FIXTURES and cld_uid and isFixture:
@@ -623,7 +644,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
         for laycol in laycols.children:
             laycol_name = get_mvr_name(laycol)
             laycol_cls = laycol.get("MVR Class")
-            if (laycol_cls == "AUXData") or (laycol_name == "AUXData"):
+            if "AUXData" in (laycol_cls, laycol_name) or laycol.name in sym_defs.keys():
                 continue
             laycol_uid = laycol.get("UUID")
             if len(laycols.children) == 1 and not laycol.objects:
@@ -646,6 +667,11 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
     if aux_collection:
         classData = aux_collection.get("View Classes")
     print("getting Collections... %s" % scene_name)
+    for obj in items.all_objects:
+        if obj.is_instancer and not obj.get("UUID"):
+            instance_name = obj.instance_collection.name
+            if instance_name not in sym_defs.keys():
+                sym_defs.setdefault(instance_name, str(pyuid.uuid4()))
 
     if items_uid:
         layer, layer_cls, layer_list = create_layer(items_name, layers, layers_cls, items_uid)
@@ -661,20 +687,24 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
         print("exporting %s... %s" % (layer_cls, items_name))
         export_collection(items, layers, layers_cls, layer_list, file_list)
 
-    if aux_collection:
+    if aux_collection or sym_defs.items():
         print("exporting AUXData...")
         if classData is not None:
             for cuid, clsname in classData.items():
-                viewclass = pymvr.Class(uuid=cuid, name=clsname)
+                viewclass = pymvr.Class(uuid=cuid, name=clsname).to_xml()
                 auxdata.classes.append(viewclass)
-        scale_vec = mathutils.Vector.Fill(3, scalefactor)
-        for child in aux_collection.children:
-            symdef_uid = child.get("UUID")
-            symdef, file_list = create_symdef(child, symdef_uid, file_list)
-            auxdata.symdefs.append(symdef)
-
-    if bool(sym_defs):
-        auxdata.symdefs.extend(list(set(sym_defs)))
+        if aux_collection is not None:
+            for child in aux_collection.children:
+                symdef_uid = child.get("UUID")
+                print("creating Symdef... %s" % child.name)
+                symdef, file_list = create_symdef(child, symdef_uid, file_list)
+                auxdata.symdefs.append(symdef)
+        for colname, reference in sym_defs.items():
+            sym_collect = data_collections.get(colname)
+            if sym_collect:
+                print("creating Symdef... %s" % colname)
+                symdef, file_list = create_symdef(sym_collect, reference, file_list)
+                auxdata.symdefs.append(symdef)
 
     scene.aux_data = auxdata
     scene.to_xml(parent=mvr.xml_root)
@@ -685,6 +715,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
     file_size = Path(filename).stat().st_size
     auxdata.classes.clear()
     auxdata.symdefs.clear()
+    sym_defs.clear()
 
     return scene, file_list
 
@@ -701,13 +732,12 @@ def save_mvr(context, items, filename, fixturepath="", scale_factor=1.0,
     folder_path = os.path.join(asset_path, Path(filename).stem)
     Path(folder_path).mkdir(parents=True, exist_ok=True)
 
-    scene, file_list = export_mvr(context, items, filename, fixturepath, folder_path,
+    try:
+        scene, file_list = export_mvr(context, items, filename, fixturepath, folder_path,
                                       asset_path, scalefactor, SELECT, IMAGES, FIXTURES,
                                       TARGETS, CONVERSE, APPLY_MATRIX, VERSION)
-    '''
     except Exception as exc:
         print(exc)
-    '''
 
     if os.path.isdir(folder_path):
         [fl.unlink() for fl in Path(folder_path).iterdir() if fl.is_file()]

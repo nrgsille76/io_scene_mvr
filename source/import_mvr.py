@@ -645,6 +645,7 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale,
         symbol_collect = data_collect.get(symbol.symdef)
 
         if symbol_collect:
+            symbol_name = symbol_collect.get("MVR Name")
             symbol_object = object_data.new(name, None)
             collection.objects.link(symbol_object)
             symbol_object.matrix_world = symbol_mtx
@@ -655,8 +656,8 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale,
             create_transform_property(symbol_object, symbol_collect)
             create_mvr_props(symbol_object, class_name, name, uid,
                              classing, symbol.uuid, symbol_type)
-            create_mvr_props(symbol_collect, symbol_type, name, symbol.uuid,
-                             classing, symbol.symdef, "Symdef")
+            create_mvr_props(symbol_collect, symbol_type, symbol_name,
+                             symbol.uuid, classing, symbol.symdef, "Symdef")
 
     if itsaFocus:
         focus_target = next((ob for ob in group_collect.objects if
