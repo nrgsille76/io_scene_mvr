@@ -377,7 +377,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
 
 
     def create_symdef(collect, symdef_uid, filelist):
-        sym_list = pymvr.ChildList()
+        sym_list = pymvr.SymdefChildList()
         geometry_name = collect.name
         consize = scalefactor
         path_list = filelist
