@@ -1457,6 +1457,7 @@ def create_beam_features(assembly, blend, focus, iris, gobo_data, gobo_count, st
     """Create the beam effect attributes."""
     rgb_beam = root_obj.get("RGB Beam")
     check_color = assembly.get("RGB")
+    random_glow = [random.uniform(0.0, 1.0) for _ in range(3)]
 
     if assembly.type == 'LIGHT':
         zoom_angle = assembly.get("Focus")

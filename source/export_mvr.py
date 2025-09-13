@@ -11,6 +11,7 @@ import os
 import bpy
 import time
 import pymvr
+import traceback
 import mathutils
 import bpy_extras
 import uuid as pyuid
@@ -377,7 +378,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
 
     def create_symdef(collect, symdef_uid, filelist):
         sym_def = pymvr.Symdef(uuid=symdef_uid, name=collect.name)
-        sym_list = pymvr.ChildList()
+        sym_list = pymvr.SymdefChildList()
         sym_def.child_list = sym_list
         geometry_name = collect.name
         consize = scalefactor
@@ -692,7 +693,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
         print("exporting AUXData...")
         if classData is not None:
             for cuid, clsname in classData.items():
-                viewclass = pymvr.Class(uuid=cuid, name=clsname).to_xml()
+                viewclass = pymvr.Class(uuid=cuid, name=clsname)
                 auxdata.classes.append(viewclass)
         if aux_collection is not None:
             for child in aux_collection.children:
@@ -738,6 +739,8 @@ def save_mvr(context, items, filename, fixturepath="", scale_factor=1.0,
                                       TARGETS, CONVERSE, APPLY_MATRIX, VERSION)
     except Exception as exc:
         print(exc)
+        traceback.print_exception(exc)
+
 
     if os.path.isdir(folder_path):
         [fl.unlink() for fl in Path(folder_path).iterdir() if fl.is_file()]
