@@ -377,9 +377,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
 
 
     def create_symdef(collect, symdef_uid, filelist):
-        sym_def = pymvr.Symdef(uuid=symdef_uid, name=collect.name)
-        sym_list = pymvr.SymdefChildList()
-        sym_def.child_list = sym_list
+        sym_list = pymvr.ChildList()
         geometry_name = collect.name
         consize = scalefactor
         path_list = filelist
@@ -432,6 +430,8 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
         elif collect.objects:
             geometry_name, consize, file_path = collect_objects(collect)
             path_list = export_symdef(collect, geometry_name, consize, file_path, filelist)
+        sym_def = pymvr.Symdef(uuid=symdef_uid, name=geometry_name)
+        sym_def.child_list = sym_list
 
         return sym_def, filelist
 
@@ -518,7 +518,8 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
         grp_cls = collect.get("MVR Class")
 
         def create_geometry(meshcol, meshlist, files, xmlcls):
-            print("creating %s... %s" % (grp_cls, grp_name))
+            geo_cls = xmlcls.__name__
+            print("creating %s... %s" % (geo_cls, grp_name))
             if all((ob.type in objectStudio for ob in meshcol.objects)):
                 meshlist, files = create_studio_object(grp_name, meshlist, files)
             else:
@@ -532,7 +533,6 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                     if not unselected and mesh.type not in objectStudio and mesh.parent is None:
                         if mesh.type in objectGeometry and not mesh.is_instancer:
                             mesh_name = get_mvr_name(mesh)
-                            mesh_type = meshcol.get("MVR Type")
                             filename = ".".join((mesh.data.name if mesh.data else mesh_name, "3ds"))
                             geometry, mtx, filelist = export_geometry(mesh, filename, files)
                             meshes.geometry3d.append(geometry)
@@ -541,13 +541,13 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                 meshlist.scene_objects.append(scene_object)
 
         def create_symbol(symcol, instalist, files, xmlcls):
+            sym_cls = xmlcls.__name__
             for insta in symcol.objects:
                 unselected = SELECT and not obj.select_get()
                 if not unselected and insta.type not in objectStudio and insta.parent is None:
                     instances = pymvr.Geometries()
                     insta_name = get_mvr_name(insta)
-                    insta_cls = insta.get("MVR Class")
-                    print("creating %s... %s" % (insta_cls, insta_name))
+                    print("creating %s... %s" % (sym_cls, insta_name))
                     if insta.is_instancer and insta.data is None:
                         symbol, mtx = export_symbol(insta)
                         instances.symbol.append(symbol)
@@ -569,7 +569,8 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                 col_name = grp_name if grp_cls in objectMVR else obj_name
                 if scene_mtx is not None:
                     mvr_matrix = pymvr.Matrix(get_transmatrix(scene_mtx))
-                    obj_cls = next((ob.get("MVR Class") for ob in collect.objects), "SceneObject")
+                    obj_cls = next((ob.get("MVR Class") for ob in collect.objects
+                                    if ob.get("MVR Class")), "SceneObject")
                     xml_cls = getattr(pymvr, obj_cls, "SceneObject")
                 if bool(collect.children) or any((ob.is_instancer for ob in collect.objects)):
                     create_symbol(collect, grouplist, filelist, xml_cls)
