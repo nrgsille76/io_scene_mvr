@@ -653,7 +653,6 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale,
         symbol_collect = data_collect.get(symbol.symdef)
 
         if symbol_collect:
-            symbol_name = symbol_collect.get("MVR Name")
             symbol_object = object_data.new(name, None)
             collection.objects.link(symbol_object)
             symbol_object.matrix_world = symbol_mtx
