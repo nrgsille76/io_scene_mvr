@@ -599,15 +599,12 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale,
         symbols.append(mvr_object)
     elif isinstance(mvr_object, pymvr.Geometry3D):
         geometrys.append(mvr_object)
-    elif not itsaSymdef and mvr_object.geometries:
-        symbols += mvr_object.geometries.symbol
-        geometrys += mvr_object.geometries.geometry3d
-    elif isinstance(mvr_object, pymvr.Symdef):
+    elif itsaSymdef:
         symbols += mvr_object.child_list.symbol
         geometrys += mvr_object.child_list.geometry3d
-    elif class_name not in objectMVR:
-        # Nothing else to do here?
-        pass
+    elif mvr_object.geometries:
+        symbols += mvr_object.geometries.symbol
+        geometrys += mvr_object.geometries.geometry3d
 
     if itsaFocus:
         active_collect = group_collect
