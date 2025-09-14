@@ -405,8 +405,8 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
             conscale = CONVERSE.to_scale()
             for obj in geometry.objects:
                 if obj.parent is None:
-                    trs_mtx = obj.data.get("Transform") if ob.data else obj.get("Transform")
-                    geo_name = obj.data.get("Reference") if ob.data else obj.get("Reference")
+                    trs_mtx = obj.data.get("Transform") if obj.data else obj.get("Transform")
+                    geo_name = obj.data.get("Reference") if obj.data else obj.get("Reference")
                     if geo_name is None:
                         geo_name = obj.data.name
                     if trs_mtx:
