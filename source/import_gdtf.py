@@ -1457,6 +1457,7 @@ def create_beam_features(assembly, blend, focus, iris, gobo_data, gobo_count, st
     """Create the beam effect attributes."""
     rgb_beam = root_obj.get("RGB Beam")
     check_color = assembly.get("RGB")
+    random_glow = [random.uniform(0.0, 1.0) for _ in range(3)]
 
     if assembly.type == 'LIGHT':
         zoom_angle = assembly.get("Focus")
@@ -1853,8 +1854,8 @@ def fixture_build(context, filename, mscale, fixname, position, focus_point, fix
             model_collection["GDTF Spec"] = name
         else:
             model_collection["GDTF Spec"] = fixture.gdtf_spec
-            if len(fixture.addresses):
-                numbers = fixture.addresses[0]
+            if len(fixture.addresses.address):
+                numbers = fixture.addresses.address[0]
                 patch = numbers.dmx_break, numbers.universe, numbers.address
         model_collection.name = index_name(fixture_name)
         create_patch_property(model_collection, patch)

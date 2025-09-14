@@ -10,8 +10,9 @@
 import os
 import bpy
 import time
+import pymvr
 import mathutils
-import py_mvr as pymvr
+import traceback
 from pathlib import Path
 from io_scene_3ds.import_3ds import load_3ds
 from .import_gdtf import fixture_build
@@ -384,121 +385,128 @@ def get_child_list(context, mscale, mvr_scene, layer, layer_idx, folderpath, ext
     viewport = viewlayer.layer_collection.children.get(layer_collect.name)
     if viewport is not None:
         viewlayer.active_layer_collection = viewport
+    
+    if hasattr(child_list, "trusses"):
+        for truss_idx, truss_obj in enumerate(child_list.trusses):
+            existing = check_existing(truss_obj, layer_collect)
 
-    for truss_idx, truss_obj in enumerate(child_list.trusses):
-        existing = check_existing(truss_obj, layer_collect)
+            if fixture_group is None:
+                group_name = truss_obj.name or "Truss"
+                group_name =  get_clean_name(group_name, truss_idx)
+                fixture_group = FixtureGroup(group_name, truss_obj.uuid)
 
-        if fixture_group is None:
-            group_name = truss_obj.name or "Truss"
-            group_name =  get_clean_name(group_name, truss_idx)
-            fixture_group = FixtureGroup(group_name, truss_obj.uuid)
+            if not existing:
+                process_mvr_object(context, mvr_scene, truss_obj, truss_idx, mscale,
+                                   apply, folderpath, extracted, layer_collect)
 
-        if not existing:
-            process_mvr_object(context, mvr_scene, truss_obj, truss_idx, mscale,
-                               apply, folderpath, extracted, layer_collect)
-
-        if hasattr(truss_obj, "child_list") and truss_obj.child_list:
-            get_child_list(context, mscale, mvr_scene, truss_obj, truss_idx,
-                           folderpath, extracted, layer_collect, apply,
-                           FIXTURES, TARGETS, fixpath, fixture_group)
-
-    for support_idx, support_obj in enumerate(child_list.supports):
-        existing = check_existing(support_obj, layer_collect)
-
-        if fixture_group is None:
-            group_name = support_obj.name or "Support"
-            group_name =  get_clean_name(group_name, support_idx)
-            fixture_group = FixtureGroup(group_name, support_obj.uuid)
-
-        if not existing:
-            process_mvr_object(context, mvr_scene, support_obj, support_idx,
-                               mscale, apply, folderpath, extracted, layer_collect)
-
-        if hasattr(support_obj, "child_list") and support_obj.child_list:
-            get_child_list(context, mscale, mvr_scene, support_obj, support_idx,
-                           folderpath, extracted, layer_collect, apply,
-                           FIXTURES, TARGETS, fixpath, fixture_group)
-
-    for project_idx, project_obj in enumerate(child_list.projectors):
-        existing = check_existing(project_obj, layer_collect)
-
-        if fixture_group is None:
-            group_name = project_obj.name or "Projector"
-            group_name =  get_clean_name(group_name, project_idx)
-            fixture_group = FixtureGroup(group_name, project_obj.uuid)
-
-        if not existing:
-            process_mvr_object(context, mvr_scene, project_obj, project_idx,
-                               mscale, apply, folderpath, extracted, layer_collect)
-
-        if hasattr(project_obj, "child_list") and project_obj.child_list:
-            get_child_list(context, mscale, mvr_scene, project_obj, project_idx,
-                           folderpath, extracted, layer_collect, apply,
-                           FIXTURES, TARGETS, fixpath, fixture_group)
-
-    for screen_idx, screen_obj in enumerate(child_list.video_screens):
-        existing = check_existing(screen_obj, layer_collect)
-
-        if fixture_group is None:
-            group_name = screen_obj.name or "Screen"
-            group_name =  get_clean_name(group_name, screen_idx)
-            fixture_group = FixtureGroup(group_name, screen_obj.uuid)
-
-        if not existing:
-            process_mvr_object(context, mvr_scene, screen_obj, screen_idx,
-                               mscale, apply, folderpath, extracted, layer_collect)
-
-        if hasattr(screen_obj, "child_list") and screen_obj.child_list:
-            get_child_list(context, mscale, mvr_scene, screen_obj, screen_idx,
-                           folderpath, extracted, layer_collect, apply,
-                           FIXTURES, TARGETS, fixpath, fixture_group)
-            
-    for scene_idx, scene_obj in enumerate(child_list.scene_objects):
-        existing = check_existing(scene_obj, layer_collect)
-
-        if not existing:
-            process_mvr_object(context, mvr_scene, scene_obj, scene_idx, mscale,
-                               apply, folderpath, extracted, layer_collect)
-
-        if hasattr(scene_obj, "child_list") and scene_obj.child_list:
-            get_child_list(context, mscale, mvr_scene, scene_obj, scene_idx, folderpath,
-                           extracted, layer_collect, apply, FIXTURES, TARGETS, fixpath)
-
-    if FIXTURES:
-        if fixture_group is None:
-            lyr_name = layer.name or "Layer"
-            fixture_group = FixtureGroup(lyr_name, layer.uuid)
-        for fixture_idx, fixture in enumerate(child_list.fixtures):
-            focus_points = []
-            if fixture.focus is not None:
-                focus_points.extend([fp for fp in child_list.focus_points if
-                                     fp.uuid == fixture.focus])
-
-            add_mvr_fixture(context, mvr_scene, fixture, mscale, folderpath,
-                            fixture_idx, layer_idx, extracted, layer_collect,
-                            apply, TARGETS, focus_points, fixpath, fixture_group)
-
-            if hasattr(fixture, "child_list") and fixture.child_list:
-                get_child_list(context, mscale, mvr_scene, fixture, fixture_idx,
+            if hasattr(truss_obj, "child_list") and truss_obj.child_list:
+                get_child_list(context, mscale, mvr_scene, truss_obj, truss_idx,
                                folderpath, extracted, layer_collect, apply,
                                FIXTURES, TARGETS, fixpath, fixture_group)
 
-    for group_idx, group in enumerate(child_list.group_objects):
-        if hasattr(group, "child_list") and group.child_list:
-            group_name, index_name, group_class = get_mvr_name(group, group_idx, layer_idx)
-            if layer_collect.get("MVR Class") == "Layer" and group.name is None:
-                group.name = "L%d Group" % layer_idx if notZero(layer_idx) else "Group"
-                group_name, index_name, group_class = get_mvr_name(group, group_idx)   
-            print("importing %s... %s" % (group_class, index_name))
-            group_collection = data_collect.new(group_name)
-            group_collection["MVR Index"] = layer_idx
-            layer_collect.children.link(group_collection)
-            create_transform_property(group, group_collection, True)
-            classing = group.classing if hasattr(group, "classing") else None
-            create_mvr_props(group_collection, group_class, group_name,
-                             group.uuid, classing, layer_collect.name)
-            get_child_list(context, mscale, mvr_scene, group, group_idx, folderpath, extracted,
-                           group_collection, apply, FIXTURES, TARGETS, fixpath, fixture_group)
+    if hasattr(child_list, "supports"):
+        for support_idx, support_obj in enumerate(child_list.supports):
+            existing = check_existing(support_obj, layer_collect)
+
+            if fixture_group is None:
+                group_name = support_obj.name or "Support"
+                group_name =  get_clean_name(group_name, support_idx)
+                fixture_group = FixtureGroup(group_name, support_obj.uuid)
+
+            if not existing:
+                process_mvr_object(context, mvr_scene, support_obj, support_idx,
+                                   mscale, apply, folderpath, extracted, layer_collect)
+
+            if hasattr(support_obj, "child_list") and support_obj.child_list:
+                get_child_list(context, mscale, mvr_scene, support_obj, support_idx,
+                               folderpath, extracted, layer_collect, apply,
+                               FIXTURES, TARGETS, fixpath, fixture_group)
+
+    if hasattr(child_list, "projectors"):
+        for project_idx, project_obj in enumerate(child_list.projectors):
+            existing = check_existing(project_obj, layer_collect)
+
+            if fixture_group is None:
+                group_name = project_obj.name or "Projector"
+                group_name =  get_clean_name(group_name, project_idx)
+                fixture_group = FixtureGroup(group_name, project_obj.uuid)
+
+            if not existing:
+                process_mvr_object(context, mvr_scene, project_obj, project_idx,
+                                   mscale, apply, folderpath, extracted, layer_collect)
+
+            if hasattr(project_obj, "child_list") and project_obj.child_list:
+                get_child_list(context, mscale, mvr_scene, project_obj, project_idx,
+                               folderpath, extracted, layer_collect, apply,
+                               FIXTURES, TARGETS, fixpath, fixture_group)
+
+    if hasattr(child_list, "video_screens"):
+        for screen_idx, screen_obj in enumerate(child_list.video_screens):
+            existing = check_existing(screen_obj, layer_collect)
+
+            if fixture_group is None:
+                group_name = screen_obj.name or "Screen"
+                group_name =  get_clean_name(group_name, screen_idx)
+                fixture_group = FixtureGroup(group_name, screen_obj.uuid)
+
+            if not existing:
+                process_mvr_object(context, mvr_scene, screen_obj, screen_idx,
+                                   mscale, apply, folderpath, extracted, layer_collect)
+
+            if hasattr(screen_obj, "child_list") and screen_obj.child_list:
+                get_child_list(context, mscale, mvr_scene, screen_obj, screen_idx,
+                               folderpath, extracted, layer_collect, apply,
+                               FIXTURES, TARGETS, fixpath, fixture_group)
+                
+    if hasattr(child_list, "scene_objects"):
+        for scene_idx, scene_obj in enumerate(child_list.scene_objects):
+            existing = check_existing(scene_obj, layer_collect)
+
+            if not existing:
+                process_mvr_object(context, mvr_scene, scene_obj, scene_idx, mscale,
+                                   apply, folderpath, extracted, layer_collect)
+
+            if hasattr(scene_obj, "child_list") and scene_obj.child_list:
+                get_child_list(context, mscale, mvr_scene, scene_obj, scene_idx, folderpath,
+                               extracted, layer_collect, apply, FIXTURES, TARGETS, fixpath)
+
+    if hasattr(child_list, "fixtures"):
+        if FIXTURES:
+            if fixture_group is None:
+                lyr_name = layer.name or "Layer"
+                fixture_group = FixtureGroup(lyr_name, layer.uuid)
+            for fixture_idx, fixture in enumerate(child_list.fixtures):
+                focus_points = []
+                if fixture.focus is not None:
+                    focus_points.extend([fp for fp in child_list.focus_points if
+                                         fp.uuid == fixture.focus])
+
+                add_mvr_fixture(context, mvr_scene, fixture, mscale, folderpath,
+                                fixture_idx, layer_idx, extracted, layer_collect,
+                                apply, TARGETS, focus_points, fixpath, fixture_group)
+
+                if hasattr(fixture, "child_list") and fixture.child_list:
+                    get_child_list(context, mscale, mvr_scene, fixture, fixture_idx,
+                                   folderpath, extracted, layer_collect, apply,
+                                   FIXTURES, TARGETS, fixpath, fixture_group)
+
+    if hasattr(child_list, "group_objects"):
+        for group_idx, group in enumerate(child_list.group_objects):
+            if hasattr(group, "child_list") and group.child_list:
+                group_name, index_name, group_class = get_mvr_name(group, group_idx, layer_idx)
+                if layer_collect.get("MVR Class") == "Layer" and group.name is None:
+                    group.name = "L%d Group" % layer_idx if notZero(layer_idx) else "Group"
+                    group_name, index_name, group_class = get_mvr_name(group, group_idx)   
+                print("importing %s... %s" % (group_class, index_name))
+                group_collection = data_collect.new(group_name)
+                group_collection["MVR Index"] = layer_idx
+                layer_collect.children.link(group_collection)
+                create_transform_property(group, group_collection, True)
+                classing = group.classing if hasattr(group, "classing") else None
+                create_mvr_props(group_collection, group_class, group_name,
+                                 group.uuid, classing, layer_collect.name)
+                get_child_list(context, mscale, mvr_scene, group, group_idx, folderpath, extracted,
+                               group_collection, apply, FIXTURES, TARGETS, fixpath, fixture_group)
 
     for obj in viewlayer.active_layer_collection.collection.all_objects:
         obj.select_set(True)
@@ -594,9 +602,12 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale,
     elif not itsaSymdef and mvr_object.geometries:
         symbols += mvr_object.geometries.symbol
         geometrys += mvr_object.geometries.geometry3d
+    elif isinstance(mvr_object, pymvr.Symdef):
+        symbols += mvr_object.child_list.symbol
+        geometrys += mvr_object.child_list.geometry3d
     elif class_name not in objectMVR:
-        symbols += mvr_object.symbol
-        geometrys += mvr_object.geometry3d
+        # Nothing else to do here?
+        pass
 
     if itsaFocus:
         active_collect = group_collect
@@ -645,6 +656,7 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale,
         symbol_collect = data_collect.get(symbol.symdef)
 
         if symbol_collect:
+            symbol_name = symbol_collect.get("MVR Name")
             symbol_object = object_data.new(name, None)
             collection.objects.link(symbol_object)
             symbol_object.matrix_world = symbol_mtx
@@ -655,8 +667,8 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale,
             create_transform_property(symbol_object, symbol_collect)
             create_mvr_props(symbol_object, class_name, name, uid,
                              classing, symbol.uuid, symbol_type)
-            create_mvr_props(symbol_collect, symbol_type, name, symbol.uuid,
-                             classing, symbol.symdef, "Symdef")
+            create_mvr_props(symbol_collect, symbol_type, symbol_name,
+                             symbol.uuid, classing, symbol.symdef, "Symdef")
 
     if itsaFocus:
         focus_target = next((ob for ob in group_collect.objects if
@@ -795,7 +807,8 @@ def load_mvr(context, filename, fixpath, mscale=mathutils.Matrix(),
 
     symdefs = []
     extracted = {}
-    importLayer = None
+    auxdata = None
+    mvr_layers = []
     imported_layers = []
     start_time = time.time()
     viewlayer = context.view_layer
@@ -809,38 +822,46 @@ def load_mvr(context, filename, fixpath, mscale=mathutils.Matrix(),
     mvr_scene = pymvr.GeneralSceneDescription(filename)
     current_path = os.path.dirname(os.path.realpath(__file__))
     folderpath = os.path.join(current_path, "assets", "mvr", layers_name)
-    mvr_layers = mvr_scene.layers if hasattr(mvr_scene, "layers") else []
     extract_mvr_textures(mvr_scene, folderpath)
     print("\ncreating Scene... %s" % layers_name)
+
+
+    if hasattr(mvr_scene, "scene") and mvr_scene.scene:
+        auxdata = mvr_scene.scene.aux_data
+        mvr_layers = mvr_scene.scene.layers
+    else:
+        auxdata = None
+        mvr_layers = []
+
+    if auxdata is not None:
+        classes = auxdata.classes
+        symdefs = auxdata.symdefs
+    else:
+        classes = []
+        symdefs = []
 
     """Deselect all objects."""
     for ob in viewlayer.objects.selected:
         ob.select_set(False)
 
-    if hasattr(mvr_scene, "aux_data"):
-        auxdata = mvr_scene.aux_data
-        print("importing AUXData...")
-        classes = auxdata.classes if hasattr(auxdata, "classes") else []
-        symdefs = auxdata.symdefs if hasattr(auxdata, "symdefs") else []
-            
-        for cls in classes:
-            classData[cls.uuid] = cls.name
+    for cls in classes:
+        classData[cls.uuid] = cls.name
 
-        for aux_idx, symdef in enumerate(symdefs):
-            if aux_dir and symdef.name in aux_dir.children:
-                aux_collection = aux_dir.children.get(symdef.name)
-            elif symdef.name in data_collect:
-                aux_collection = data_collect.get(symdef.name)
-            else:
-                aux_collection = data_collect.new(symdef.name)
+    for aux_idx, symdef in enumerate(symdefs):
+        if aux_dir and symdef.name in aux_dir.children:
+            aux_collection = aux_dir.children.get(symdef.name)
+        elif symdef.name in data_collect:
+            aux_collection = data_collect.get(symdef.name)
+        else:
+            aux_collection = data_collect.new(symdef.name)
 
-            auxData.setdefault(symdef.uuid, aux_collection)
-            process_mvr_object(context, mvr_scene, symdef, aux_idx, mscale,
-                               APPLY_MATRIX, folderpath, extracted, aux_collection)
+        auxData.setdefault(symdef.uuid, aux_collection)
+        process_mvr_object(context, mvr_scene, symdef, aux_idx, mscale,
+                           APPLY_MATRIX, folderpath, extracted, aux_collection)
 
-            if hasattr(symdef, "child_list") and symdef.child_list:
-                get_child_list(context, mscale, mvr_scene, symdef.child_list, aux_idx, folderpath,
-                               extracted, aux_collection, APPLY_MATRIX, FIXTURES, TARGETS, fixpath)
+        if hasattr(symdef, "child_list") and symdef.child_list:
+            get_child_list(context, mscale, mvr_scene, symdef, aux_idx, folderpath,
+                           extracted, aux_collection, APPLY_MATRIX, FIXTURES, TARGETS, fixpath)
 
     print("importing Layers... %s" % scene_collect.name)
     for layer_idx, layer in enumerate(mvr_layers):
