@@ -264,7 +264,7 @@ def get_fixture(context, fixture, specs, file_list, folders, scale, SELECT, TARG
         focus_mtx = pymvr.Matrix(get_transmatrix(CONVERSE, target))
         print("exporting FocusPoint... %s" % focus_name)
         if target.children and any((ob.type == 'MESH' for ob in target.children_recursive)):
-            target_mesh = '.'.join((' '.join((target_name, "Target")), "3ds"))
+            target_mesh = ".".join((" ".join((target_name, "Target")), "3ds"))
             for obj in target.children_recursive:
                 if obj.parent == target:
                     target_mtx = obj.matrix_parent_inverse.copy() @ target.matrix_local.copy()
@@ -292,7 +292,6 @@ def get_fixture(context, fixture, specs, file_list, folders, scale, SELECT, TARG
         fix_object = pymvr.Fixture(name=fixture_name, uuid=uid, gdtf_spec=specs, gdtf_mode=fix_mode,
                                    matrix=trs_mtx, fixture_id=str(fix_id), fixture_id_numeric=fix_id)
 
-    #fix_object.addresses.clear()
     for prop in props:
         patch_numbers.append(fixture.get(prop) if fixture.get(prop) is not None else 0)
 
