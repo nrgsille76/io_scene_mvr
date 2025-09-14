@@ -406,10 +406,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
 
         def export_symdef(geo, name, size, path, pathlist):
             convertscale = sum(size * scale_vec) / 3
-            if name.endswith(".3ds"):
-                mesh_name = name
-            else:
-                mesh_name = ".".join((name, "3ds"))
+            mesh_name = name if name.endswith(".3ds") else f"{name}.3ds"
             print("adding Geometry3D... %s" % mesh_name)
             if path is None:
                 path = os.path.join(folder_path, mesh_name)
@@ -432,7 +429,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
         sym_def = pymvr.Symdef(uuid=symdef_uid, name=geometry_name)
         sym_def.child_list = sym_list
 
-        return sym_def, filelist
+        return sym_def, path_list
 
 
     def export_symbol(sym):
