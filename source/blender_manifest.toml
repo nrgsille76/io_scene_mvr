@@ -11,7 +11,7 @@ license = ["SPDX:GPL-3.0-or-later"]
 website = "https://github.com/nrgsille76/io_scene_mvr"
 copyright = ["2024 Sebastian Schrand"]
 wheels = [
-  "wheels/pymvr-1.0.3.dev2-py3-none-any.whl",
+  "wheels/pymvr-1.0.4.dev0-py3-none-any.whl",
   "wheels/py_gdtf-1.0.4-py3-none-any.whl",
   "wheels/io_scene_3ds-2.8.0-py3-none-any.whl",
 ]
