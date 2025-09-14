@@ -436,14 +436,15 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
 
 
     def export_symbol(sym):
-        sym_uid = sym.get("UUID")
+        insta = sym.instance_collection
         sym_ref = sym.get("Reference")
+        sym_uid = insta.get("Reference")
         transform = sym.get("Transform")
         symbol_name = get_mvr_name(sym)
         if sym_uid is None:
             sym_uid = str(pyuid.uuid4())
         if sym_ref is None:
-            sym_ref = sym_defs.get(sym.instance_collection.name)
+            sym_ref = sym_defs.get(insta.name)
         if transform is None:
             transmtx = pymvr.Matrix(get_transmatrix(CONVERSE, sym))
         else:
