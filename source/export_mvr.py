@@ -28,6 +28,18 @@ objectMVR = {"SceneObject", "Truss", "Support", "Projector", "VideoScreen"}
 nodeMVR = {"GroupObject"}.union(objectMVR)
 
 
+def isFixture(col):
+    """Check if it is a fixture collection."""
+    is_profile = col.get("Company")
+    is_fixture = bool(is_profile)
+    if is_profile is None and any(
+        (ob.get("geometry_type") for ob in col.objects)
+    ):
+        is_fixture = True
+
+    return is_fixture
+
+
 def get_gdtf_name(name):
     """Create GDTF Spec (Company@Fixture.gdtf)."""
     if name is None:
@@ -77,9 +89,13 @@ def drop_suffix(name):
     if name is None:
         return ""
     split_name = name.split()
+    splen = len(split_name)
     final_name = split_name[0]
-    if len(split_name) > 2:
-        final_name = " ".join(split_name[:-1])
+    if splen > 2:
+        if splen > 3 and split_name[-1].isdigit() and split_name[-2].isdigit():
+            final_name = " ".join(split_name[:-2])
+        else:
+            final_name = " ".join(split_name[:-1])
 
     return final_name
 
@@ -338,6 +354,8 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
     def export_fixture(profile, childlist, filelist):
         print("exporting Fixture... %s" % profile.name)
         gdtf_name = profile.get("GDTF Spec")
+        if gdtf_name is None:
+            gdtf_name = drop_suffix(profile.name)
         gdtf_spec = get_gdtf_name(gdtf_name)
         profile_path = get_filepath(gdtf_spec, asset_path, True)
         if fixturepath and profile_path is None:
@@ -386,9 +404,9 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
             meshsize = meshpath = None
             conscale = CONVERSE.to_scale()
             for obj in geometry.objects:
-                if obj.data and obj.parent is None:
-                    trs_mtx = obj.data.get("Transform")
-                    geo_name = obj.data.get("Reference")
+                if obj.parent is None:
+                    trs_mtx = obj.data.get("Transform") if ob.data else obj.get("Transform")
+                    geo_name = obj.data.get("Reference") if ob.data else obj.get("Reference")
                     if geo_name is None:
                         geo_name = obj.data.name
                     if trs_mtx:
@@ -625,10 +643,9 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
             cld_cls = child.get("MVR Class")
             if "AUXData" in (cld_cls, childname) or child.name in sym_defs.keys():
                 continue
-            isFixture = child.get("Company")
-            if FIXTURES and cld_uid and isFixture:
+            if FIXTURES and cld_uid and isFixture(child):
                 laylist, filelist = export_fixture(child, laylist, filelist)
-            elif not isFixture:
+            elif not isFixture(child):
                 if lay_cls in layerMVR and bool(child.children) or any((ob.is_instancer for ob in child.objects)):
                     group, grp_cls, grplist = create_layer(childname, layer, lay_cls, cld_uid, laylist)
                     print("exporting %s... %s" % (grp_cls, childname))
@@ -658,7 +675,6 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
 
     items_uid = items.get("UUID")
     items_name = get_mvr_name(items)
-    is_profile = items.get("Company")
     items_class = items.get("MVR Class")
     aux_collection = bpy.data.collections.get("AUXData")
     print("creating %s... %s" % (layers_cls, scene_name))
@@ -675,7 +691,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
 
     if items_uid:
         layer, layer_cls, layer_list = create_layer(items_name, layers, layers_cls, items_uid)
-        if FIXTURES and is_profile:
+        if FIXTURES and isFixture(items):
             layer_list, file_list = export_fixture(items, layer_list, file_list)
         elif items.children or items.objects:
             export_collection(items, layer, layer_cls, layer_list, file_list)
