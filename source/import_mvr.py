@@ -663,9 +663,9 @@ def process_mvr_object(context, mvr_scene, mvr_object, mvr_idx, mscale,
             symbol_object.instance_collection = symbol_collect
             create_transform_property(symbol_object, symbol_collect)
             create_mvr_props(symbol_object, class_name, name, uid,
-                             classing, symbol.uuid, symbol_type)
-            create_mvr_props(symbol_collect, symbol_type, symbol_name,
-                             symbol.uuid, classing, symbol.symdef, "Symdef")
+                             classing, symbol.symdef, symbol_type)
+            create_mvr_props(symbol_collect, symbol_type, name,
+                             symbol.symdef, classing, symbol.uuid, "Symdef")
 
     if itsaFocus:
         focus_target = next((ob for ob in group_collect.objects if
@@ -831,6 +831,7 @@ def load_mvr(context, filename, fixpath, mscale=mathutils.Matrix(),
         mvr_layers = []
 
     if auxdata is not None:
+        print("importing AUXData...")
         classes = auxdata.classes
         symdefs = auxdata.symdefs
     else:
