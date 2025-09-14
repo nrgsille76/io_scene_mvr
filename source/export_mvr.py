@@ -166,7 +166,7 @@ def get_material_images(material, path):
         if image:
             img_name = Path(image.filepath).name
             file_path = os.path.join(path, img_name)
-            if image.has_data and not os.path.isfile(file_path):
+            if not os.path.isfile(file_path):
                 image.save(filepath=file_path)
                 images.append((file_path, img_name))
 
