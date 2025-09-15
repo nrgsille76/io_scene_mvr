@@ -408,7 +408,7 @@ def export_mvr(context, items, filename, fixturepath, folder_path, asset_path, s
                     trs_mtx = obj.data.get("Transform") if obj.data else obj.get("Transform")
                     geo_name = obj.data.get("Reference") if obj.data else obj.get("Reference")
                     if geo_name is None:
-                        geo_name = obj.data.name
+                        geo_name = obj.data.name if obj.data else obj.name
                     if trs_mtx:
                         meshsize = mathutils.Vector((trs_mtx[0], trs_mtx[4], trs_mtx[8]))
                     elif meshsize is None:
