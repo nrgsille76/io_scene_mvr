@@ -836,36 +836,36 @@ def load_model(profile, name, model):
     return obj
 
 
-def collect_attributes(channels, index, functions, logic=False):
+def collect_attributes(channels, logic=False):
     """Collect fixture preset types and attributes."""
     has_blend = has_focus = has_gobos = has_iris = zoom_range = False
     pan_range = tilt_range = None
     wheels = []
 
     for channel in channels:
-        if "Gobo" in channel[index]:
+        if "Gobo" in channel["ID"]:
             has_gobos = True
             if not logic:
-                gobo_functions = channel.get(functions)
+                gobo_functions = channel.get("Functions")
                 for function in gobo_functions:
                     wheel_function = str(function.wheel)
                     if wheel_function != "None" and wheel_function not in wheels:
                         wheels.append(wheel_function)
-        if "Zoom" in channel[index]:
-            zoom_functions = channel.get(functions)
+        if "Zoom" in channel["ID"]:
+            zoom_functions = channel.get("Functions")
             zoom_range = zoom_functions[0].physical_from.value, zoom_functions[0].physical_to.value
-        if "Iris" in channel[index]:
+        if "Iris" in channel["ID"]:
             has_iris = True
         if not logic:
-            if "Focus" in channel[index]:
+            if "Focus" in channel["ID"]:
                 has_focus = True
-            if "Frost" in channel[index]:
+            if "Frost" in channel["ID"]:
                 has_blend = True
-            if "Pan" in channel[index]:
-                pan_functions = channel.get(functions)
+            if "Pan" in channel["ID"]:
+                pan_functions = channel.get("Functions")
                 pan_range = pan_functions[0].physical_from.value, pan_functions[0].physical_to.value
-            if "Tilt" in channel[index]:
-                tilt_functions = channel.get(functions)
+            if "Tilt" in channel["ID"]:
+                tilt_functions = channel.get("Functions")
                 tilt_range = tilt_functions[0].physical_from.value, tilt_functions[0].physical_to.value
 
 
@@ -901,7 +901,7 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
     root_geometry = profile.geometries.get_geometry_by_name(dmx_mode.geometry)
     logical_channels = [channel for break_channels in dmx_channels for channel in break_channels]
     virtual_channels = pygdtf.utils.get_virtual_channels(profile, mode)
-    has_gobos, has_iris, zoom_range = collect_attributes(logical_channels, "ID", "Functions", True)
+    has_gobos, has_iris, zoom_range = collect_attributes(logical_channels, True)
 
     for channel in logical_channels:
         if "Color1" in channel["ID"]:
@@ -1890,7 +1890,7 @@ def fixture_build(context, filename, mscale, fixname, position, focus_point, fix
             mode = gdtf_profile.dmx_modes[min(MODE_NR, len(gdtf_profile.dmx_modes)) - 1].name
     dmx_channels = collect_dmx_channels(gdtf_profile, mode)
     channels += [channel for break_channels in dmx_channels for channel in break_channels]
-    has_blend, has_focus, has_iris, zoom_range, wheels = collect_attributes(channels, "ID", "Functions")
+    has_blend, has_focus, has_iris, zoom_range, wheels = collect_attributes(channels)
 
     linkDict = {}
     wheel_name = ""
