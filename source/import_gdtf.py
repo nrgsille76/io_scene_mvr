@@ -534,7 +534,7 @@ def collect_dmx_channels(gdtf_profile, mode):
         break_channels = dmx_channels[channel_break - 1]
         break_addition = 0
         if hasattr(geometry, "breaks"):
-            dmx_offset = pygdtf.utils.get_address_by_break(geometry.breaks, channel_break)
+            dmx_offset = pygdtf.utils._get_address_by_break(geometry.breaks, channel_break)
             if dmx_offset is not None:
                 break_addition = dmx_offset.address - 1
         offset_coarse = channel.offset[0] + break_addition
