@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 id = "io_scene_mvr"
 name = "Scene MVR (.mvr) and GDTF (.gdtf)"
-version = "1.4.2"
+version = "1.4.3"
 tagline = "My Virtual Rig and General Device Type Format"
 maintainer = "NRG Sille <getmore@nrgsille.com>"
 type = "add-on"
@@ -12,7 +12,7 @@ website = "https://github.com/nrgsille76/io_scene_mvr"
 copyright = ["2024 Sebastian Schrand"]
 wheels = [
   "wheels/pymvr-1.0.4-py3-none-any.whl",
-  "wheels/py_gdtf-1.0.4-py3-none-any.whl",
+  "wheels/pygdtf-1.3.0-py3-none-any.whl",
   "wheels/io_scene_3ds-2.8.4-py3-none-any.whl",
 ]
 
