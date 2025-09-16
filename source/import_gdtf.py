@@ -12,10 +12,10 @@ import os
 import bpy
 import copy
 import math
+import pygdtf
 import random
 import mathutils
 import uuid as pyuid
-import py_gdtf as pygdtf
 from types import SimpleNamespace
 from io_scene_3ds.import_3ds import load_3ds
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
@@ -31,9 +31,11 @@ colorMix = {"R", "G", "B", "C", "M", "Y"}
 
 class FixtureMode(object):
 
-    def __init__(self, profile):
-        self._name = next((md.name for md in profile.dmx_modes if
-                           md.name.split(" ")[0] == "Standard"), "Standard")
+    def __init__(self, profile, number):
+        mode_list = profile.dmx_modes.as_dict()
+        self._name = next(
+            (md.get("name") for md in mode_list if md.get("name")
+             and md.get("mode_id") == number), "Standard")
 
     @property
     def name(self):
@@ -72,14 +74,14 @@ def cleanup_name(geometry):
     return f"{root_name}{name}"
 
 
-def create_fixture_name(name):
+def create_fixture_name(name, space="@"):
     if "@" not in name:
         return Path(name).stem
     split_name = name.split("@")
     if len(split_name) > 2:
         manufacturer = split_name[0]
         fixture_name = split_name[1]
-        clean_name = manufacturer + "@" + fixture_name
+        clean_name = manufacturer + space + fixture_name
     elif len(split_name) > 1:
         manufacturer = split_name[0]
         clean_name = Path(split_name[1]).stem
@@ -478,20 +480,20 @@ def create_trackball_property(item, prop, targets):
 def collect_dmx_channels(gdtf_profile, mode):
     dmx_mode = None
     dmx_channels = []
-    dmx_mode = pygdtf.utils.get_dmx_mode_by_name(gdtf_profile, mode)
+    dmx_mode = gdtf_profile.dmx_modes.get_mode_by_name(mode)
 
     if dmx_mode:
-        root_geometry = pygdtf.utils.get_geometry_by_name(gdtf_profile, dmx_mode.geometry)
+        root_geometry = gdtf_profile.geometries.get_geometry_by_name(dmx_mode.geometry)
     else:
         root_geometry = None
-    device_channels = pygdtf.utils.get_channels_for_geometry(gdtf_profile, root_geometry, dmx_mode.dmx_channels, [])
+    device_channels = pygdtf.utils._get_channels_for_geometry(gdtf_profile, root_geometry, dmx_mode.dmx_channels, [])
 
     for channel, geometry in device_channels:
         channel_range = []
         feature = str(channel.logical_channels[0].attribute)
         functions = channel.logical_channels[0].channel_functions
         if len(functions):
-            channel_range += [functions[0].physical_from, functions[0].physical_to]
+            channel_range += [functions[0].physical_from.value, functions[0].physical_to.value]
         if channel.offset is None:
             continue
         channel_break = channel.dmx_break
@@ -667,17 +669,17 @@ def extract_gobos(profile, fid, fixturename, wheels):
             if not os.path.isdir(wheel_path):
                 os.makedirs(wheel_path)
             for idx, slot in enumerate(wheel.wheel_slots, 1):
+                media_file = str(slot.media_file_name.name)
                 media_name = f"{name}_{wheel.name}-{idx:04}.png"
-                media_file = str(slot.media_file_name)
                 name_split = media_file.split(".")
                 if not len(name_split[0]):
                     destination = Path(wheel_path, media_name)
                     destination.write_bytes(open_image.read_bytes())
                     gobo_source = destination.resolve()
                 else:
-                    extend = name_split[-1]
+                    extend = str(slot.media_file_name.extension)
                     media_name = f"{name}_{wheel.name}-{idx:04}.{extend}"
-                    img_path = Path(os.path.join(images_path, str(media_file)))
+                    img_path = Path(os.path.join(images_path, str(slot.media_file_name)))
                     destination = Path(wheel_path, media_name)
                     if os.path.isfile(img_path):
                         destination.write_bytes(img_path.read_bytes())
@@ -815,7 +817,7 @@ def collect_attributes(channels, index, functions, logic=False):
                         wheels.append(wheel_function)
         if "Zoom" in channel[index]:
             zoom_functions = channel.get(functions)
-            zoom_range = zoom_functions[0].physical_from, zoom_functions[0].physical_to
+            zoom_range = zoom_functions[0].physical_from.value, zoom_functions[0].physical_to.value
         if "Iris" in channel[index]:
             has_iris = True
         if not logic:
@@ -825,10 +827,10 @@ def collect_attributes(channels, index, functions, logic=False):
                 has_blend = True
             if "Pan" in channel[index]:
                 pan_functions = channel.get(functions)
-                pan_range = pan_functions[0].physical_from, pan_functions[0].physical_to
+                pan_range = pan_functions[0].physical_from.value, pan_functions[0].physical_to.value
             if "Tilt" in channel[index]:
                 tilt_functions = channel.get(functions)
-                tilt_range = tilt_functions[0].physical_from, tilt_functions[0].physical_to
+                tilt_range = tilt_functions[0].physical_from.value, tilt_functions[0].physical_to.value
 
 
     if logic:
@@ -846,7 +848,7 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
     profile_cls = profile.__class__.__name__
     fixturetype_id = profile.fixture_type_id
     collection = bpy.data.collections.new(name)
-    dmx_mode = pygdtf.utils.get_dmx_mode_by_name(profile, mode)
+    dmx_mode = profile.dmx_modes.get_mode_by_name(mode)
     has_gobos = has_iris = zoom_range = False
 
     if dmx_mode is None:
@@ -861,7 +863,7 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
     collection["MVR Type"] = profile_cls
     create_gdtf_props(collection, fixturename)
     dmx_channels = collect_dmx_channels(profile, mode)
-    root_geometry = pygdtf.utils.get_geometry_by_name(profile, dmx_mode.geometry)
+    root_geometry = profile.geometries.get_geometry_by_name(dmx_mode.geometry)
     logical_channels = [channel for break_channels in dmx_channels for channel in break_channels]
     virtual_channels = pygdtf.utils.get_virtual_channels(profile, mode)
 
@@ -893,7 +895,7 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
             ob.select_set(False)
 
         if isinstance(geometry, pygdtf.GeometryReference):
-            reference = pygdtf.utils.get_geometry_by_name(profile, geometry.geometry)
+            reference = profile.geometries.get_geometry_by_name(geometry.geometry)
             geometry.model = reference.model
             if hasattr(reference, "geometries"):
                 for sub_geometry in reference.geometries:
@@ -908,7 +910,7 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
 
             geometry.model = ""
         else:
-            model = copy.deepcopy(pygdtf.utils.get_model_by_name(profile, geometry.model))
+            model = copy.deepcopy(profile.models.get_model_by_name(geometry.model))
 
         if isinstance(geometry, pygdtf.GeometryReference):
             model.name = f"{geometry}"
@@ -1025,7 +1027,7 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
         if isinstance(geometry, pygdtf.GeometryAxis):
             return "Axis"
         if isinstance(geometry, pygdtf.GeometryReference):
-            geometry = pygdtf.utils.get_geometry_by_name(profile, geometry.geometry)
+            geometry = profile.geometries.get_geometry_by_name(geometry.geometry)
             return get_geometry_type_as_string(geometry)
         return "Normal"
 
@@ -1285,7 +1287,7 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
         elif isinstance(geometry, (pygdtf.GeometryMediaServerCamera)):
             create_camera(geometry)
         elif isinstance(geometry, pygdtf.GeometryReference):
-            reference = copy.deepcopy(pygdtf.utils.get_geometry_by_name(profile, geometry.geometry))
+            reference = copy.deepcopy(profile.geometries.get_geometry_by_name(geometry.geometry))
             reference.name = cleanup_name(geometry)
             add_child_position(reference)
             reference.position = geometry.position
@@ -1821,8 +1823,8 @@ def fixture_build(context, filename, mscale, fixname, position, focus_point, fix
         target_id = str(pyuid.uuid4()) if fixture.focus is None else fixture.focus
     else:
         name = fixname
-        mode = FixtureMode(gdtf_profile)
-        fixture_name = create_fixture_name(fixname)
+        mode = FixtureMode(gdtf_profile, MODE_NR)
+        fixture_name = create_fixture_name(fixname, " ")
         target_id = str(pyuid.uuid4())
 
 
@@ -1870,6 +1872,7 @@ def fixture_build(context, filename, mscale, fixname, position, focus_point, fix
             mode = gdtf_profile.dmx_modes[MODE_NR].name
         else:
             mode = gdtf_profile.dmx_modes[min(MODE_NR, len(gdtf_profile.dmx_modes)) - 1].name
+    
     dmx_channels = collect_dmx_channels(gdtf_profile, mode)
     channels += [channel for break_channels in dmx_channels for channel in break_channels]
     virtual_channels = pygdtf.utils.get_virtual_channels(gdtf_profile, mode)
