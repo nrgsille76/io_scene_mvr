@@ -173,7 +173,9 @@ def create_color_driver(item, target, path):
 
 def create_ctc_driver(item, target):
     """Create a driver for color temperature."""
-    ctc_node = item.data.node_tree.nodes.get("Color Temperature")
+    item_data = item.data
+    temperature = item.get("Temperature")
+    ctc_node = item_data.node_tree.nodes.get("Color Temperature")
     ctc_curve = ctc_node.inputs[0].driver_add("default_value")
     ctc_drive = ctc_curve.driver
     ctc_drive.type = 'AVERAGE'
@@ -182,8 +184,20 @@ def create_ctc_driver(item, target):
     ctc_target = ctc_var.targets[0]
     ctc_target.id = target
     ctc_target.use_fallback_value = True
-    ctc_target.fallback_value = item.get("Temperature")
+    ctc_target.fallback_value = temperature
     ctc_target.data_path = '["Light CTC"]'
+    if hasattr(item_data, "temperature"):
+        item_data.use_temperature = True
+        tmp_curve = item_data.driver_add("temperature")
+        tmp_drive = tmp_curve.driver
+        tmp_drive.type = 'AVERAGE'
+        tmp_var = tmp_drive.variables.new()
+        tmp_var.name = "ctc"
+        tmp_target = tmp_var.targets[0]
+        tmp_target.id = target
+        tmp_target.use_fallback_value = True
+        tmp_target.fallback_value = temperature
+        tmp_target.data_path = '["Light CTC"]'
 
 
 def create_factor_driver(item, target):
@@ -1221,17 +1235,20 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
             links.new(gamma_node.outputs[0], lightcontrast.inputs[0])
             links.new(factor_node.outputs[0], lightfalloff.inputs[0])
             links.new(fresnel_node.outputs[0], layerweight.inputs[0])
-            links.new(lightpath.outputs[9], lightcontrast.inputs[1])
+            links.new(lightpath.outputs[10], lightcontrast.inputs[1])
             links.new(lightcontrast.outputs[0], light_mix.inputs[1])
+            links.new(lightpath.outputs[9], lightfalloff.inputs[1])
             links.new(lightfalloff.outputs[1], light_mix.inputs[0])
-            links.new(lightpath.outputs[7], lightfalloff.inputs[1])
             links.new(light_uv.outputs[1], light_normal.inputs[0])
             links.new(light_uv.outputs[3], layerweight.inputs[1])
             links.new(lightpath.outputs[8], gamma_node.inputs[1])
             links.new(color_temp.outputs[0], light_mix.inputs[2])
             links.new(lightfalloff.outputs[0], emit.inputs[1])
             links.new(light_mix.outputs[0], emit.inputs[0])
-            for out in lightpath.outputs[:7]:
+            out_distance = (lightpath.outputs[:8]
+                            if len(lightpath.outputs) >= 14
+                            else lightpath.outputs[:7])
+            for out in out_distance:
                 out.hide = True
 
     def create_laser(geometry):
@@ -1516,7 +1533,7 @@ def create_beam_features(assembly, blend, focus, iris, gobo_data, gobo_count, st
             if gobo_data:
                 iris_mix = nodes.new("ShaderNodeMixRGB")
                 links.new(iris_node.outputs[0], iris_mix.inputs[2])
-                links.new(light_path.outputs[7], iris_mix.inputs[0])
+                links.new(light_path.outputs[8], iris_mix.inputs[0])
                 iris_mix.label = iris_mix.name = "Iris Mix"
                 iris_mix.blend_type = 'DARKEN'
                 iris_mix.location = (-500, 340)
@@ -1591,9 +1608,9 @@ def create_beam_features(assembly, blend, focus, iris, gobo_data, gobo_count, st
                     links.new(pre_node.outputs[0], gobo_mix.inputs[1])
                     links.new(gobo_node.outputs[0], gobo_mix.inputs[2])
                     links.new(light_uv.outputs[5], rota_node.inputs[0])
-                    links.new(light_path.outputs[7], gobo_mix.inputs[0])
                     links.new(rota_node.outputs[0], gobo_node.inputs[0])
                     links.new(gobo_mix.outputs[0], gamma_node.inputs[0])
+                    links.new(light_path.outputs[8], gobo_mix.inputs[0])
                     pre_node = gobo_mix
         else:
             gradient_node = nodes.new("ShaderNodeTexGradient")
@@ -1683,7 +1700,7 @@ def create_beam_features(assembly, blend, focus, iris, gobo_data, gobo_count, st
                             light_fall.location = (-840, 460)
                             light_path.location = (-1040, 460)
                             gobo_links.new(light_path.outputs[1], light_fall.inputs[0])
-                            gobo_links.new(light_path.outputs[8], light_fall.inputs[1])
+                            gobo_links.new(light_path.outputs[9], light_fall.inputs[1])
                         gobo_node.color_mapping.blend_type = 'LINEAR_LIGHT'
                         root_obj["%s Select" % gobo_name] = 0
                         gobo_mix.blend_type = 'MULTIPLY'
@@ -1717,7 +1734,7 @@ def create_beam_features(assembly, blend, focus, iris, gobo_data, gobo_count, st
                         light_fall.location = (-840, 460)
                         light_path.location = (-1040, 460)
                         gobo_links.new(light_path.outputs[1], light_fall.inputs[0])
-                        gobo_links.new(light_path.outputs[8], light_fall.inputs[1])
+                        gobo_links.new(light_path.outputs[9], light_fall.inputs[1])
                     if previous_node is not None:
                         iris_mix = gobo_nodes.new("ShaderNodeMixRGB")
                         iris_mix.label = iris_mix.name = "Iris Mix"
