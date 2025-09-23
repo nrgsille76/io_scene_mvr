@@ -1235,20 +1235,17 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
             links.new(gamma_node.outputs[0], lightcontrast.inputs[0])
             links.new(factor_node.outputs[0], lightfalloff.inputs[0])
             links.new(fresnel_node.outputs[0], layerweight.inputs[0])
-            links.new(lightpath.outputs[10], lightcontrast.inputs[1])
+            links.new(lightpath.outputs[-4], lightcontrast.inputs[1])
+            links.new(lightpath.outputs[-3], lightfalloff.inputs[1])
             links.new(lightcontrast.outputs[0], light_mix.inputs[1])
-            links.new(lightpath.outputs[9], lightfalloff.inputs[1])
             links.new(lightfalloff.outputs[1], light_mix.inputs[0])
+            links.new(lightpath.outputs[-5], gamma_node.inputs[1])
             links.new(light_uv.outputs[1], light_normal.inputs[0])
             links.new(light_uv.outputs[3], layerweight.inputs[1])
-            links.new(lightpath.outputs[8], gamma_node.inputs[1])
             links.new(color_temp.outputs[0], light_mix.inputs[2])
             links.new(lightfalloff.outputs[0], emit.inputs[1])
             links.new(light_mix.outputs[0], emit.inputs[0])
-            out_distance = (lightpath.outputs[:8]
-                            if len(lightpath.outputs) >= 14
-                            else lightpath.outputs[:7])
-            for out in out_distance:
+            for out in lightpath.outputs[:-6]:
                 out.hide = True
 
     def create_laser(geometry):
@@ -1540,7 +1537,6 @@ def create_beam_features(assembly, blend, focus, iris, gobo_data, gobo_count, st
                 iris_out = iris_mix
             else:
                 assembly.location[2] += 0.01
-            links.new(light_path.outputs[9], lightcontrast.inputs[1])
             create_iris_nodes(assembly.data, root_obj, iris_node, light_uv)
             emit_node.location = (300, 300)
             light_mix.location = (100, 340)
