@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 __author__ = "Sebastian Sille <nrgsille@gmail.com>"
-__version__ = "1.4.5"
+__version__ = "1.4.6"
 __date__ = "2 Aug 2024"
 
 
@@ -39,7 +39,7 @@ from bpy.types import (
 bl_info = {
     "name": "Import MVR & GDTF",
     "author": "Sebastian Sille",
-    "version": (1, 4, 4),
+    "version": (1, 4, 6),
     "blender": (4, 0, 0),
     "location": "File > Import",
     "description": "Import My Virtual Rig and General Device Type Format",
