@@ -13,7 +13,7 @@
 &nbsp;&nbsp; `File --> Import --> General Device Type Format (.gdtf)`  
 
 **Version**  
-&nbsp;&nbsp; 1.4.5  
+&nbsp;&nbsp; 1.4.6  
 
 **Authors**  
 &nbsp;&nbsp; Sebastian Schrand, Hugo Aboud, Vanous,  
