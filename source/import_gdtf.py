@@ -1661,16 +1661,16 @@ def create_beam_features(assembly, blend, focus, iris, gobo_data, gobo_count, st
             create_dimmer_driver(principled_node.inputs["Emission Strength"], root_obj, assembly) 
         elif assembly.get("Geometry Type") == "Gobo":
             gobo_material = assembly.data.materials[0]
-            gobo_nodes = gobo_material.node_tree.nodes
             if zoom_range and zoom_angle:
                 check_zoom = root_obj.get("Focus Zoom", False) 
                 if not check_zoom:
                     create_range_property(root_obj, zoom_angle, "Focus Zoom", zoom_range)
                 create_range_property(assembly, zoom_angle, "Focus", zoom_range)
                 create_zoom_driver(assembly, root_obj, "Focus Zoom")
-            if not gobo_nodes.get("Wheel Shader"):
+            if gobo_material.node_tree is None or gobo_material.node_tree.nodes.get("Wheel Shader") is None:
                 if hasattr(gobo_material, "use_nodes"):
                     gobo_material.use_nodes = True
+                gobo_nodes = gobo_material.node_tree.nodes
                 gobo_links = gobo_material.node_tree.links
                 material_node = gobo_nodes.get("Material Output", gobo_nodes.new("ShaderNodeOutputMaterial"))
                 principled_bsdf = gobo_nodes.get("Principled BSDF")
