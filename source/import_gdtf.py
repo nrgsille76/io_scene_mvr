@@ -129,6 +129,7 @@ def create_gdtf_props(item, name):
 def create_dimmer_driver(item, target, power):
     """Create a driver for dimmer intensity."""
     dimmer_val = "energy" if item.type == 'SPOT' else "default_value"
+    formula = "dim * 0.002" if power.get("Geometry Type") == "Filter" else "dim * 0.01"
     dimmer_curve = item.driver_add(dimmer_val)
     dimmer_drive = dimmer_curve.driver
     dimmer_drive.type = 'SCRIPTED'
@@ -137,7 +138,7 @@ def create_dimmer_driver(item, target, power):
     dimmer_target = dimmer_var.targets[0]
     dimmer_target.id = target
     dimmer_target.data_path = '["Intensity"]'
-    dimmer_drive.expression = "power * dim * 0.01" if item.type == 'SPOT' else "dim * 0.01"
+    dimmer_drive.expression = "power * dim * 0.01" if item.type == 'SPOT' else f"dim * {formula}"
     if item.type == 'SPOT':
         energy_var = dimmer_drive.variables.new()
         energy_var.name = "power"
@@ -1063,6 +1064,8 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
             return "Camera"
         if isinstance(geometry, pygdtf.GeometryBeam):
             return "Beam"
+        if isinstance(geometry, pygdtf.GeometryFilterBeam):
+            return "Filter"
         if isinstance(geometry, pygdtf.GeometryLaser):
             return "Laser"
         if isinstance(geometry, pygdtf.GeometryAxis):
@@ -1189,6 +1192,7 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
             nodes = light_data.node_tree.nodes
             links = light_data.node_tree.links
             emit = nodes.get("Emission")
+            output = nodes.get("Light Output")
             emit.label = emit.name = "Fixture"
             light_mix = nodes.new("ShaderNodeMixRGB")
             gamma_node = nodes.new("ShaderNodeGamma")
@@ -1209,6 +1213,7 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
             focus_factor = light_power / max(pow(geometry.beam_angle, 2), 1e-09)
             light_mix.blend_type = 'MULTIPLY'
             emit.location = (100, 320)
+            output.location = (300, 320)
             light_mix.location = (-100, 360)
             gamma_node.location = (-500, 340)
             color_temp.location = (-300, 220)
@@ -1228,6 +1233,9 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
             layerweight.location = (-1160, 440) if has_gobos else (-700, 440)
             fresnel_node.location = (-1340, 420) if has_gobos else (-900, 420)
             light_normal.location = (-1540, 400) if has_gobos else (-1100, 400)
+            links.new(lightpath.outputs["Diffuse Depth"], lightcontrast.inputs[1])
+            links.new(lightpath.outputs["Glossy Depth"], lightfalloff.inputs[1])
+            links.new(lightpath.outputs["Ray Depth"], gamma_node.inputs[1])
             links.new(light_normal.outputs[0], fresnel_node.inputs[1])
             links.new(light_normal.outputs[1], fresnel_node.inputs[0])
             links.new(layerweight.outputs[0], lightcontrast.inputs[2])
@@ -1235,17 +1243,15 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
             links.new(gamma_node.outputs[0], lightcontrast.inputs[0])
             links.new(factor_node.outputs[0], lightfalloff.inputs[0])
             links.new(fresnel_node.outputs[0], layerweight.inputs[0])
-            links.new(lightpath.outputs[-4], lightcontrast.inputs[1])
-            links.new(lightpath.outputs[-3], lightfalloff.inputs[1])
             links.new(lightcontrast.outputs[0], light_mix.inputs[1])
             links.new(lightfalloff.outputs[1], light_mix.inputs[0])
-            links.new(lightpath.outputs[-5], gamma_node.inputs[1])
             links.new(light_uv.outputs[1], light_normal.inputs[0])
             links.new(light_uv.outputs[3], layerweight.inputs[1])
             links.new(color_temp.outputs[0], light_mix.inputs[2])
             links.new(lightfalloff.outputs[0], emit.inputs[1])
             links.new(light_mix.outputs[0], emit.inputs[0])
-            for out in lightpath.outputs[:-6]:
+            outputs = lightpath.outputs[:-6] if len(lightpath.outputs) <= 14 else lightpath.outputs[:-7]
+            for out in outputs:
                 out.hide = True
 
     def create_laser(geometry):
@@ -1530,7 +1536,7 @@ def create_beam_features(assembly, blend, focus, iris, gobo_data, gobo_count, st
             if gobo_data:
                 iris_mix = nodes.new("ShaderNodeMixRGB")
                 links.new(iris_node.outputs[0], iris_mix.inputs[2])
-                links.new(light_path.outputs[8], iris_mix.inputs[0])
+                links.new(light_path.outputs["Ray Length"], iris_mix.inputs[0])
                 iris_mix.label = iris_mix.name = "Iris Mix"
                 iris_mix.blend_type = 'DARKEN'
                 iris_mix.location = (-500, 340)
@@ -1596,6 +1602,7 @@ def create_beam_features(assembly, blend, focus, iris, gobo_data, gobo_count, st
                     light_output.location = (500 + align_x, 300) if iris else (300 + align_x, 300)
                     lightfalloff.location = (-300 + align_x, 220) if iris else (-500 + align_x, 220)
                     lightcontrast.location = (-100 + align_x, 360) if iris else (-300 + align_x, 360)
+                    links.new(light_path.outputs["Ray Length"], gobo_mix.inputs[0])
                     if iris:
                         iris_mix.location = (-500 + align_x, 340)
                         iris_node.location = (-700 + align_x, 150)
@@ -1606,7 +1613,6 @@ def create_beam_features(assembly, blend, focus, iris, gobo_data, gobo_count, st
                     links.new(light_uv.outputs[5], rota_node.inputs[0])
                     links.new(rota_node.outputs[0], gobo_node.inputs[0])
                     links.new(gobo_mix.outputs[0], gamma_node.inputs[0])
-                    links.new(light_path.outputs[8], gobo_mix.inputs[0])
                     pre_node = gobo_mix
         else:
             gradient_node = nodes.new("ShaderNodeTexGradient")
@@ -1625,7 +1631,8 @@ def create_beam_features(assembly, blend, focus, iris, gobo_data, gobo_count, st
         if assembly.get("Geometry Type") == "Beam":
             emit_color = assembly.get("RGB", False)
             beam_material = assembly.data.materials[0]
-            beam_material.use_nodes = True
+            if hasattr(beam_material, "use_nodes"):
+                beam_material.use_nodes = True
             principled_node = beam_material.node_tree.nodes.get("Principled BSDF")
             if emit_color:
                 if rgb_beam is None:
@@ -1635,27 +1642,40 @@ def create_beam_features(assembly, blend, focus, iris, gobo_data, gobo_count, st
         elif assembly.get("Geometry Type") == "Glow":
             glow_color = assembly.get("RGB", False)
             glow_material = assembly.data.materials[0]
-            glow_material.use_nodes = True
+            if hasattr(glow_material, "use_nodes"):
+                glow_material.use_nodes = True
             principled_node = glow_material.node_tree.nodes.get("Principled BSDF")
             if glow_color:
                 create_color_property(root_obj, random_glow, "RGB Glow")
                 create_color_driver(principled_node.inputs["Emission Color"], root_obj, "RGB Glow")
-            create_dimmer_driver(principled_node.inputs["Emission Strength"], root_obj, assembly)   
+            create_dimmer_driver(principled_node.inputs["Emission Strength"], root_obj, assembly)
+        elif assembly.get("Geometry Type") == "Filter":
+            filter_color = assembly.get("RGB", False)
+            filter_material = assembly.data.materials[0]
+            if hasattr(filter_material, "use_nodes"):
+                filter_material.use_nodes = True
+            principled_node = filter_material.node_tree.nodes.get("Principled BSDF")
+            if filter_color:
+                create_color_property(root_obj, gel, "RGB Beam")
+                create_color_driver(principled_node.inputs["Emission Color"], root_obj, "RGB Beam")
+            create_dimmer_driver(principled_node.inputs["Emission Strength"], root_obj, assembly) 
         elif assembly.get("Geometry Type") == "Gobo":
             gobo_material = assembly.data.materials[0]
+            gobo_nodes = gobo_material.node_tree.nodes
             if zoom_range and zoom_angle:
                 check_zoom = root_obj.get("Focus Zoom", False) 
                 if not check_zoom:
                     create_range_property(root_obj, zoom_angle, "Focus Zoom", zoom_range)
                 create_range_property(assembly, zoom_angle, "Focus", zoom_range)
                 create_zoom_driver(assembly, root_obj, "Focus Zoom")
-            if not gobo_material.use_nodes:
-                gobo_material.use_nodes = True
-                gobo_nodes = gobo_material.node_tree.nodes
+            if not gobo_nodes.get("Wheel Shader"):
+                if hasattr(gobo_material, "use_nodes"):
+                    gobo_material.use_nodes = True
                 gobo_links = gobo_material.node_tree.links
-                material_node = gobo_nodes.get("Material Output")
+                material_node = gobo_nodes.get("Material Output", gobo_nodes.new("ShaderNodeOutputMaterial"))
                 principled_bsdf = gobo_nodes.get("Principled BSDF")
-                gobo_nodes.remove(principled_bsdf)
+                if principled_bsdf is not None:
+                    gobo_nodes.remove(principled_bsdf)
                 gobo_cord = gobo_nodes.new("ShaderNodeTexCoord")
                 gobo_cord.label = gobo_cord.name = "Gobo Coordinate"
                 opacity_node = gobo_nodes.new("ShaderNodeBsdfTransparent")
@@ -1678,6 +1698,7 @@ def create_beam_features(assembly, blend, focus, iris, gobo_data, gobo_count, st
                     previous_node = wheel_node
                 gobo_cord.location = (-1040, 90)
                 opacity_node.location = (100, 300)
+                material_node.location = (320, 300)
                 gobo_links.new(opacity_node.outputs[0], material_node.inputs[0])
                 if wheels:
                     for idx, wheel in enumerate(list(gobo_data.keys())[1:], 2):
@@ -1824,10 +1845,40 @@ def get_emit_material(obj, color, fixturename, index, prop):
     create_gdtf_props(emit_material, fixturename)
     emit_material["Fixture ID"] = index
     emit_material["Geometry Type"] = "Beam"
-    emit_shader = PrincipledBSDFWrapper(emit_material, is_readonly=False, use_nodes=True)
+    emit_shader = PrincipledBSDFWrapper(emit_material, is_readonly=False)
     emit_shader.emission_strength = 1.0
     emit_shader.emission_color = color[:] if emit_color else emit_shader.base_color[:]
 
+
+def get_filter_material(obj, color, fixturename, index, prop):
+    """Get a filter material."""
+    obj.hide_select = True
+    filter_color = obj.get("RGB")
+    bname = create_fixture_name(fixturename)
+    beamname ="ID%d_%s_%s" % (index, bname, prop) if index >= 1 else "%s_%s" % (bname, prop)
+    if len(obj.data.materials):
+        filter_material = obj.data.materials[0]
+        filter_material["Fixture ID"] = index
+        filter_material.name = beamname
+    else:
+        filter_material = bpy.data.materials.get(beamname)
+    if (filter_material is None or
+        filter_material.get("Fixture ID") != index or
+        filter_material.get("RGB") != filter_color
+    ):
+        obj.data.materials.clear()
+        filter_material = bpy.data.materials.new(beamname)
+        obj.data.materials.append(filter_material)
+        if filter_color:
+            filter_material["RGB"] = filter_color
+    obj.active_material = filter_material
+    create_gdtf_props(filter_material, fixturename)
+    filter_material["Fixture ID"] = index
+    filter_material["Geometry Type"] = "Filter"
+    filter_shader = PrincipledBSDFWrapper(filter_material, is_readonly=False)
+    filter_shader.alpha = 0.4
+    filter_shader.emission_strength = 0.5
+    filter_shader.emission_color = color[:] if filter_color else filter_shader.base_color[:]
 
 
 def fixture_build(context, filename, mscale, fixname, position, focus_point, fix_id, gelcolor,
@@ -1994,6 +2045,8 @@ def fixture_build(context, filename, mscale, fixname, position, focus_point, fix
                 get_emit_material(obj, gelcolor, fixture_name, fix_id, "Beam")
             elif obj.get("Geometry Type") == "Glow" and obj.type == 'MESH':
                 get_emit_material(obj, gelcolor, fixture_name, fix_id, "Glow")
+            elif obj.get("Geometry Class") == "GeometryFilterBeam" and obj.type == 'MESH':
+                get_filter_material(obj, gelcolor, fixture_name, fix_id, "Beam")
             elif obj.get("Geometry Type") == "Target":
                 obj.name = index_name(obj.name)
                 obj.matrix_world = focus_point
