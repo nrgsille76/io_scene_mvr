@@ -643,6 +643,12 @@ def load_gdtf_primitive(model):
     return obj
 
 
+def use_shader_nodes(item):
+    """Check shader nodes."""
+    if hasattr(item, "use_nodes"):
+        item.use_nodes = True
+
+
 def create_iris_nodes(item, root, irisnode, outputnode):
     """Create iris shader node setup."""
     check_spot = item.id_type == 'LIGHT'
@@ -1187,8 +1193,8 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
         gobo_radius = 2.2 * 0.01 * math.tan(math.radians(geometry.beam_angle / 2))
         goboGeometry = SimpleNamespace(name=f"Gobo {geometry}", length=gobo_radius, width=gobo_radius,
                                        height=0, primitive_type="Plane", beam_radius=geometry.beam_radius)
-        if len(light_data.node_tree.nodes) < 3 or not light_data.use_nodes:
-            light_data.use_nodes = True
+        if len(light_data.node_tree.nodes) < 3:
+            use_shader_nodes(light_data)
             nodes = light_data.node_tree.nodes
             links = light_data.node_tree.links
             emit = nodes.get("Emission")
@@ -1631,8 +1637,7 @@ def create_beam_features(assembly, blend, focus, iris, gobo_data, gobo_count, st
         if assembly.get("Geometry Type") == "Beam":
             emit_color = assembly.get("RGB", False)
             beam_material = assembly.data.materials[0]
-            if hasattr(beam_material, "use_nodes"):
-                beam_material.use_nodes = True
+            use_shader_nodes(beam_material)
             principled_node = beam_material.node_tree.nodes.get("Principled BSDF")
             if emit_color:
                 if rgb_beam is None:
@@ -1642,8 +1647,7 @@ def create_beam_features(assembly, blend, focus, iris, gobo_data, gobo_count, st
         elif assembly.get("Geometry Type") == "Glow":
             glow_color = assembly.get("RGB", False)
             glow_material = assembly.data.materials[0]
-            if hasattr(glow_material, "use_nodes"):
-                glow_material.use_nodes = True
+            use_shader_nodes(glow_material)
             principled_node = glow_material.node_tree.nodes.get("Principled BSDF")
             if glow_color:
                 create_color_property(root_obj, random_glow, "RGB Glow")
@@ -1652,8 +1656,7 @@ def create_beam_features(assembly, blend, focus, iris, gobo_data, gobo_count, st
         elif assembly.get("Geometry Type") == "Filter":
             filter_color = assembly.get("RGB", False)
             filter_material = assembly.data.materials[0]
-            if hasattr(filter_material, "use_nodes"):
-                filter_material.use_nodes = True
+            use_shader_nodes(filter_material)
             principled_node = filter_material.node_tree.nodes.get("Principled BSDF")
             if filter_color:
                 create_color_property(root_obj, gel, "RGB Beam")
@@ -1668,8 +1671,7 @@ def create_beam_features(assembly, blend, focus, iris, gobo_data, gobo_count, st
                 create_range_property(assembly, zoom_angle, "Focus", zoom_range)
                 create_zoom_driver(assembly, root_obj, "Focus Zoom")
             if gobo_material.node_tree is None or gobo_material.node_tree.nodes.get("Wheel Shader") is None:
-                if hasattr(gobo_material, "use_nodes"):
-                    gobo_material.use_nodes = True
+                use_shader_nodes(gobo_material)
                 gobo_nodes = gobo_material.node_tree.nodes
                 gobo_links = gobo_material.node_tree.links
                 material_node = gobo_nodes.get("Material Output", gobo_nodes.new("ShaderNodeOutputMaterial"))
