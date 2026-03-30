@@ -1193,7 +1193,7 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
         gobo_radius = 2.2 * 0.01 * math.tan(math.radians(geometry.beam_angle / 2))
         goboGeometry = SimpleNamespace(name=f"Gobo {geometry}", length=gobo_radius, width=gobo_radius,
                                        height=0, primitive_type="Plane", beam_radius=geometry.beam_radius)
-        if len(light_data.node_tree.nodes) < 3:
+        if not light_data.use_nodes or len(light_data.node_tree.nodes) < 3:
             use_shader_nodes(light_data)
             nodes = light_data.node_tree.nodes
             links = light_data.node_tree.links
