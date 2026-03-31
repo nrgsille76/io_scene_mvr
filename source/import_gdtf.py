@@ -1938,8 +1938,11 @@ def fixture_build(context, filename, mscale, fixname, position, focus_point, fix
             model_collection["GDTF Spec"] = name
         else:
             model_collection["GDTF Spec"] = fixture.gdtf_spec
-            if len(fixture.addresses.address):
+            if hasattr(fixture.addresses, "address") and len(fixture.addresses.address):
                 numbers = fixture.addresses.address[0]
+                patch = numbers.dmx_break, numbers.universe, numbers.address
+            elif len(fixture.addresses):
+                numbers = fixture.addresses.addresses[0]
                 patch = numbers.dmx_break, numbers.universe, numbers.address
         model_collection.name = index_name(fixture_name)
         create_patch_property(model_collection, patch)
