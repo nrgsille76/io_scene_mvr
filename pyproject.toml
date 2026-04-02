@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 [tool.autopep8]
-max_line_length = 120
+max_line_length = 160
 ignore = ["E721", "E722", "E402", "W690"]
 aggressive = 2
 
 [project]
 name = "io_scene_mvr"
-version = "1.5.2"
+version = "1.5.3"
 authors = [{ name="Sebastian Sille", email="getmore@nrgsille.com" },]
 description = "My Virtual Rig and General Device Type Format"
 readme = "README.md"
@@ -25,7 +25,7 @@ Issues = "https://github.com/nrgsille76/io_scene_mvr/issues"
 
 [tool.poetry]
 name = "io_scene_mvr"
-version = "1.5.2"
+version = "1.5.3"
 description = "My Virtual Rig and General Device Type Format"
 license = "GPL-2.0-or-later"
 authors = ["Sebastian", "Vanous"]
