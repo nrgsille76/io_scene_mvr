@@ -205,7 +205,18 @@ def get_matrix(obj, mtx):
     obj_mtx = mathutils.Matrix(mtx_data).transposed()
     check_float = any(isinstance(i, float) for i in
                       set().union(sum(mtx_data, [])))
-    global_matrix = obj_mtx @ mtx if check_float else mtx
+    if check_float:
+        scaled = [row[:] for row in mtx_data]
+        if len(scaled) >= 4 and len(scaled[3]) >= 3:
+            scaled[3][0] *= 0.001
+            scaled[3][1] *= 0.001
+            scaled[3][2] *= 0.001
+        if len(scaled) >= 4 and len(scaled[3]) >= 4:
+            scaled[3][3] = 1.0
+        obj_mtx = mathutils.Matrix(scaled).transposed()
+        global_matrix = obj_mtx @ mtx
+    else:
+        global_matrix = mtx
 
     return global_matrix
 
@@ -820,7 +831,6 @@ def load_mvr(context, filename, fixpath, mscale=mathutils.Matrix(),
     folderpath = os.path.join(current_path, "assets", "mvr", layers_name)
     extract_mvr_textures(mvr_scene, folderpath)
     print("\ncreating Scene... %s" % layers_name)
-
 
     if hasattr(mvr_scene, "scene") and mvr_scene.scene:
         auxdata = mvr_scene.scene.aux_data
