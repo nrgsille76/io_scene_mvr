@@ -889,7 +889,6 @@ def collect_attributes(channels, logic=False):
                 tilt_functions = channel.get("Functions")
                 tilt_range = tilt_functions[0].physical_from.value, tilt_functions[0].physical_to.value
 
-
     if logic:
         return has_gobos, has_iris, zoom_range
     else:
@@ -1193,72 +1192,72 @@ def build_collection(profile, fixturename, fixture_id, uid, target_id, mode, BEA
         gobo_radius = 2.2 * 0.01 * math.tan(math.radians(geometry.beam_angle / 2))
         goboGeometry = SimpleNamespace(name=f"Gobo {geometry}", length=gobo_radius, width=gobo_radius,
                                        height=0, primitive_type="Plane", beam_radius=geometry.beam_radius)
-        if not light_data.use_nodes or len(light_data.node_tree.nodes) < 3:
-            use_shader_nodes(light_data)
-            nodes = light_data.node_tree.nodes
-            links = light_data.node_tree.links
-            emit = nodes.get("Emission")
-            output = nodes.get("Light Output")
-            emit.label = emit.name = "Fixture"
-            light_mix = nodes.new("ShaderNodeMixRGB")
-            gamma_node = nodes.new("ShaderNodeGamma")
-            factor_node = nodes.new("ShaderNodeValue")
-            lightpath = nodes.new("ShaderNodeLightPath")
-            light_normal = nodes.new("ShaderNodeNormal")
-            color_temp = nodes.new('ShaderNodeBlackbody')
-            fresnel_node = nodes.new("ShaderNodeFresnel")
-            light_uv = nodes.new("ShaderNodeNewGeometry")
-            layerweight = nodes.new("ShaderNodeLayerWeight")
-            lightfalloff = nodes.new("ShaderNodeLightFalloff")
-            lightcontrast = nodes.new("ShaderNodeBrightContrast")
-            light_mix.label = light_mix.name = "Light Mix"
-            light_uv.label = light_uv.name = "Light Orientation"
-            factor_node.label = factor_node.name = "Focus Factor"
-            color_temp.label = color_temp.name = "Color Temperature"
-            lightcontrast.label = lightcontrast.name = "Light Contrast"
-            focus_factor = light_power / max(pow(geometry.beam_angle, 2), 1e-09)
-            light_mix.blend_type = 'MULTIPLY'
-            emit.location = (100, 320)
-            output.location = (300, 320)
-            light_mix.location = (-100, 360)
-            gamma_node.location = (-500, 340)
-            color_temp.location = (-300, 220)
-            factor_node.location = (-700, 150)
-            lightfalloff.location = (-500, 220)
-            lightcontrast.location = (-300, 360)
-            if has_gobos or has_iris:
-                light_data.shadow_soft_size = geometry.beam_radius * 0.2
-                create_gobo(geometry, goboGeometry)
-            color_temp.inputs[0].default_value = ctc
-            emit.inputs[0].default_value[:3] = [1.0] * 3
-            light_mix.inputs[1].default_value[:3] = [1.0] * 3
-            light_mix.inputs[2].default_value[:3] = [1.0] * 3
-            factor_node.outputs[0].default_value = focus_factor
-            lightpath.location = (-1340, 320) if has_gobos else (-900, 320)
-            light_uv.location = (-1720, 300) if has_gobos else (-1300, 300)
-            layerweight.location = (-1160, 440) if has_gobos else (-700, 440)
-            fresnel_node.location = (-1340, 420) if has_gobos else (-900, 420)
-            light_normal.location = (-1540, 400) if has_gobos else (-1100, 400)
-            links.new(lightpath.outputs["Diffuse Depth"], lightcontrast.inputs[1])
-            links.new(lightpath.outputs["Glossy Depth"], lightfalloff.inputs[1])
-            links.new(lightpath.outputs["Ray Depth"], gamma_node.inputs[1])
-            links.new(light_normal.outputs[0], fresnel_node.inputs[1])
-            links.new(light_normal.outputs[1], fresnel_node.inputs[0])
-            links.new(layerweight.outputs[0], lightcontrast.inputs[2])
-            links.new(layerweight.outputs[1], lightfalloff.inputs[1])
-            links.new(gamma_node.outputs[0], lightcontrast.inputs[0])
-            links.new(factor_node.outputs[0], lightfalloff.inputs[0])
-            links.new(fresnel_node.outputs[0], layerweight.inputs[0])
-            links.new(lightcontrast.outputs[0], light_mix.inputs[1])
-            links.new(lightfalloff.outputs[1], light_mix.inputs[0])
-            links.new(light_uv.outputs[1], light_normal.inputs[0])
-            links.new(light_uv.outputs[3], layerweight.inputs[1])
-            links.new(color_temp.outputs[0], light_mix.inputs[2])
-            links.new(lightfalloff.outputs[0], emit.inputs[1])
-            links.new(light_mix.outputs[0], emit.inputs[0])
-            outputs = lightpath.outputs[:-6] if len(lightpath.outputs) <= 14 else lightpath.outputs[:-7]
-            for out in outputs:
-                out.hide = True
+
+        use_shader_nodes(light_data)
+        nodes = light_data.node_tree.nodes
+        links = light_data.node_tree.links
+        emit = nodes.get("Emission")
+        output = nodes.get("Light Output")
+        emit.label = emit.name = "Fixture"
+        light_mix = nodes.new("ShaderNodeMixRGB")
+        gamma_node = nodes.new("ShaderNodeGamma")
+        factor_node = nodes.new("ShaderNodeValue")
+        lightpath = nodes.new("ShaderNodeLightPath")
+        light_normal = nodes.new("ShaderNodeNormal")
+        color_temp = nodes.new('ShaderNodeBlackbody')
+        fresnel_node = nodes.new("ShaderNodeFresnel")
+        light_uv = nodes.new("ShaderNodeNewGeometry")
+        layerweight = nodes.new("ShaderNodeLayerWeight")
+        lightfalloff = nodes.new("ShaderNodeLightFalloff")
+        lightcontrast = nodes.new("ShaderNodeBrightContrast")
+        light_mix.label = light_mix.name = "Light Mix"
+        light_uv.label = light_uv.name = "Light Orientation"
+        factor_node.label = factor_node.name = "Focus Factor"
+        color_temp.label = color_temp.name = "Color Temperature"
+        lightcontrast.label = lightcontrast.name = "Light Contrast"
+        focus_factor = light_power / max(pow(geometry.beam_angle, 2), 1e-09)
+        light_mix.blend_type = 'MULTIPLY'
+        emit.location = (100, 320)
+        output.location = (300, 320)
+        light_mix.location = (-100, 360)
+        gamma_node.location = (-500, 340)
+        color_temp.location = (-300, 220)
+        factor_node.location = (-700, 150)
+        lightfalloff.location = (-500, 220)
+        lightcontrast.location = (-300, 360)
+        if has_gobos or has_iris:
+            light_data.shadow_soft_size = geometry.beam_radius * 0.2
+            create_gobo(geometry, goboGeometry)
+        color_temp.inputs[0].default_value = ctc
+        emit.inputs[0].default_value[:3] = [1.0] * 3
+        light_mix.inputs[1].default_value[:3] = [1.0] * 3
+        light_mix.inputs[2].default_value[:3] = [1.0] * 3
+        factor_node.outputs[0].default_value = focus_factor
+        lightpath.location = (-1340, 320) if has_gobos else (-900, 320)
+        light_uv.location = (-1720, 300) if has_gobos else (-1300, 300)
+        layerweight.location = (-1160, 440) if has_gobos else (-700, 440)
+        fresnel_node.location = (-1340, 420) if has_gobos else (-900, 420)
+        light_normal.location = (-1540, 400) if has_gobos else (-1100, 400)
+        links.new(lightpath.outputs["Diffuse Depth"], lightcontrast.inputs[1])
+        links.new(lightpath.outputs["Glossy Depth"], lightfalloff.inputs[1])
+        links.new(lightpath.outputs["Ray Depth"], gamma_node.inputs[1])
+        links.new(light_normal.outputs[0], fresnel_node.inputs[1])
+        links.new(light_normal.outputs[1], fresnel_node.inputs[0])
+        links.new(layerweight.outputs[0], lightcontrast.inputs[2])
+        links.new(layerweight.outputs[1], lightfalloff.inputs[1])
+        links.new(gamma_node.outputs[0], lightcontrast.inputs[0])
+        links.new(factor_node.outputs[0], lightfalloff.inputs[0])
+        links.new(fresnel_node.outputs[0], layerweight.inputs[0])
+        links.new(lightcontrast.outputs[0], light_mix.inputs[1])
+        links.new(lightfalloff.outputs[1], light_mix.inputs[0])
+        links.new(light_uv.outputs[1], light_normal.inputs[0])
+        links.new(light_uv.outputs[3], layerweight.inputs[1])
+        links.new(color_temp.outputs[0], light_mix.inputs[2])
+        links.new(lightfalloff.outputs[0], emit.inputs[1])
+        links.new(light_mix.outputs[0], emit.inputs[0])
+        outputs = lightpath.outputs[:-6] if len(lightpath.outputs) <= 14 else lightpath.outputs[:-7]
+        for out in outputs:
+            out.hide = True
 
     def create_laser(geometry):
         if cleanup_name(geometry) not in objectDict:
@@ -1938,10 +1937,7 @@ def fixture_build(context, filename, mscale, fixname, position, focus_point, fix
             model_collection["GDTF Spec"] = name
         else:
             model_collection["GDTF Spec"] = fixture.gdtf_spec
-            if hasattr(fixture.addresses, "address") and len(fixture.addresses.address):
-                numbers = fixture.addresses.address[0]
-                patch = numbers.dmx_break, numbers.universe, numbers.address
-            elif len(fixture.addresses):
+            if len(fixture.addresses.addresses):
                 numbers = fixture.addresses.addresses[0]
                 patch = numbers.dmx_break, numbers.universe, numbers.address
         model_collection.name = index_name(fixture_name)
