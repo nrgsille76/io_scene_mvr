@@ -248,8 +248,8 @@ def get_transmatrix(matrix, obj=None):
     if isinstance(matrix, tuple) or mtx_cls == "IDPropertyArray":
         matrix = trans_matrix(matrix)
     rotate = matrix.to_quaternion()
-    translate = matrix.to_translation()
     scale = mathutils.Matrix().to_scale()
+    translate = matrix.to_translation() * 1000.0
     mtx = mathutils.Matrix.LocRotScale(translate, rotate, scale).transposed().to_3x3()
     trans_mtx = list((mtx[0][:], mtx[1][:], mtx[2][:], translate[:]))
 
@@ -320,7 +320,7 @@ def get_fixture(context, fixture, specs, file_list, folders, scale, SELECT, TARG
         patch_numbers.append(fixture.get(prop) if fixture.get(prop) is not None else 0)
 
     patch = pymvr.Address(dmx_break=patch_numbers[0], universe=patch_numbers[1], address=patch_numbers[2])
-    fix_object.addresses = pymvr.Addresses(address=[patch])
+    fix_object.addresses = pymvr.Addresses(addresses=[patch])
     patch_numbers.clear()
 
     if base and base.get("RGB Beam") is not None:
@@ -779,7 +779,6 @@ def save_mvr(context, items, filename, fixturepath="", scale_factor=1.0,
     except Exception as exc:
         print(exc)
         traceback.print_exception(exc)
-
 
     if os.path.isdir(folder_path):
         [fl.unlink() for fl in Path(folder_path).iterdir() if fl.is_file()]
