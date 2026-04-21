@@ -138,7 +138,7 @@ def create_dimmer_driver(item, target, power):
     dimmer_target = dimmer_var.targets[0]
     dimmer_target.id = target
     dimmer_target.data_path = '["Intensity"]'
-    dimmer_drive.expression = "power * dim * 0.01" if item.type == 'SPOT' else f"dim * {formula}"
+    dimmer_drive.expression = "power * dim * 0.01" if item.type == 'SPOT' else f"{formula}"
     if item.type == 'SPOT':
         energy_var = dimmer_drive.variables.new()
         energy_var.name = "power"
