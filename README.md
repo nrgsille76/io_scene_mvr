@@ -12,6 +12,9 @@
 &nbsp;&nbsp; `File --> Import/Export --> My Virtual Rig (.mvr)`  
 &nbsp;&nbsp; `File --> Import --> General Device Type Format (.gdtf)`  
 
+**Manual**  
+&nbsp;&nbsp; [Documentation](https://github.com/nrgsille76/io_scene_mvr/wiki)
+
 **Version**  
 &nbsp;&nbsp; 1.5.4  
 
